@@ -19,7 +19,7 @@ class OnlineTagMatcher(private val context: Context) {
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
-    private val prefs = context.getSharedPreferences("arashi_music_tags", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences("arashi_music_tags_v4", Context.MODE_PRIVATE)
 
     fun getSavedTag(trackId: Long): OnlineTagResult? {
         val raw = prefs.getString("tag_$trackId", null) ?: return null
@@ -32,6 +32,8 @@ class OnlineTagMatcher(private val context: Context) {
                 album = obj.optString("album"),
                 coverUrl = obj.optString("coverUrl").ifBlank { null },
                 syncedLyrics = obj.optString("syncedLyrics").ifBlank { null },
+                translatedLyrics = obj.optString("translatedLyrics").ifBlank { null },
+                phoneticLyrics = obj.optString("phoneticLyrics").ifBlank { null },
                 source = obj.optString("source")
             )
         }.getOrNull()
@@ -45,6 +47,8 @@ class OnlineTagMatcher(private val context: Context) {
             put("album", tag.album)
             put("coverUrl", tag.coverUrl ?: "")
             put("syncedLyrics", tag.syncedLyrics ?: "")
+            put("translatedLyrics", tag.translatedLyrics ?: "")
+            put("phoneticLyrics", tag.phoneticLyrics ?: "")
             put("source", tag.source)
         }
         prefs.edit().putString("tag_$trackId", obj.toString()).apply()
@@ -65,11 +69,19 @@ class OnlineTagMatcher(private val context: Context) {
         list
     }
 
+    /**
+     * 拉取原词 + 外语中文翻译 (tlyric) + 日语罗马音/汉语拼音标音 (romalrc)
+     */
     suspend fun fetchLyricsForCandidate(candidate: OnlineTagResult): OnlineTagResult = withContext(Dispatchers.IO) {
-        if (!candidate.syncedLyrics.isNullOrBlank()) return@withContext candidate
         if (candidate.source == "网易云" && candidate.songId.isNotBlank()) {
-            val lrc = fetchNetEaseLyrics(candidate.songId)
-            if (!lrc.isNullOrBlank()) return@withContext candidate.copy(syncedLyrics = lrc)
+            val triple = fetchNetEaseMultilingualLyrics(candidate.songId)
+            if (!triple.first.isNullOrBlank()) {
+                return@withContext candidate.copy(
+                    syncedLyrics = triple.first,
+                    translatedLyrics = triple.second,
+                    phoneticLyrics = triple.third
+                )
+            }
         }
         val fallbackLrc = fetchLrclib("${candidate.title} ${candidate.artist}")
         candidate.copy(syncedLyrics = fallbackLrc)
@@ -126,19 +138,22 @@ class OnlineTagMatcher(private val context: Context) {
         return results
     }
 
-    private fun fetchNetEaseLyrics(songId: String): String? {
+    private fun fetchNetEaseMultilingualLyrics(songId: String): Triple<String?, String?, String?> {
         return runCatching {
             val req = Request.Builder()
-                .url("https://music.163.com/api/song/lyric?id=$songId&lv=1&kv=1&tv=-1")
+                .url("https://music.163.com/api/song/lyric?id=$songId&lv=1&kv=1&tv=-1&rv=1")
                 .header("Referer", "https://music.163.com/")
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
                 .build()
             client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return@use null
+                if (!resp.isSuccessful) return@use Triple(null, null, null)
                 val root = JSONObject(resp.body?.string().orEmpty())
-                root.optJSONObject("lrc")?.optString("lyric")?.ifBlank { null }
+                val orig = root.optJSONObject("lrc")?.optString("lyric")?.ifBlank { null }
+                val trans = root.optJSONObject("tlyric")?.optString("lyric")?.ifBlank { null }
+                val roma = root.optJSONObject("romalrc")?.optString("lyric")?.ifBlank { null }
+                Triple(orig, trans, roma)
             }
-        }.getOrNull()
+        }.getOrDefault(Triple(null, null, null))
     }
 
     private fun searchItunes(keyword: String): List<OnlineTagResult> {
@@ -178,7 +193,7 @@ class OnlineTagMatcher(private val context: Context) {
         return runCatching {
             val req = Request.Builder()
                 .url("https://lrclib.net/api/search?q=$encoded")
-                .header("User-Agent", "ArashiPlayer/3.0")
+                .header("User-Agent", "ArashiPlayer/4.0")
                 .build()
             client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@use null

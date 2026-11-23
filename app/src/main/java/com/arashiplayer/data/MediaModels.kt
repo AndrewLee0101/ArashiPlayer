@@ -1,7 +1,10 @@
 package com.arashiplayer.data
 
+import android.content.Context
 import android.net.Uri
 import java.io.File
+
+enum class VideoLayoutMode { FOLDER_ROW, COLUMN_LIST, GRID }
 
 data class LocalVideo(
     val id: Long,
@@ -46,7 +49,7 @@ data class LocalImage(
 
 data class SubtitleStyleConfig(
     val textColorArgb: Int = android.graphics.Color.WHITE,
-    val backgroundOpacity: Float = 0.42f,
+    val backgroundOpacity: Float = 0.35f,
     val textOpacity: Float = 1.0f,
     val textSizeSp: Float = 18f,
     val bottomPaddingFraction: Float = 0.08f
@@ -59,13 +62,29 @@ data class OnlineTagResult(
     val album: String,
     val coverUrl: String?,
     val syncedLyrics: String?,
+    val translatedLyrics: String? = null,
+    val phoneticLyrics: String? = null,
     val source: String
 )
 
 data class LyricLine(
     val timestampMs: Long,
-    val text: String
+    val text: String,
+    val translation: String? = null,
+    val phonetic: String? = null
 )
+
+class FavoritesStore(context: Context) {
+    private val prefs = context.getSharedPreferences("arashi_favorites", Context.MODE_PRIVATE)
+
+    fun isFavorite(path: String): Boolean = prefs.getBoolean("fav_$path", false)
+
+    fun toggleFavorite(path: String): Boolean {
+        val next = !isFavorite(path)
+        prefs.edit().putBoolean("fav_$path", next).apply()
+        return next
+    }
+}
 
 fun formatDuration(ms: Long): String {
     if (ms <= 0L) return "00:00"

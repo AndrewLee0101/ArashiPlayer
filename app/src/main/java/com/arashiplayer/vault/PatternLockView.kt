@@ -29,9 +29,7 @@ fun PatternLockGrid(
                     onDragStart = { offset ->
                         selected.clear()
                         currentTouch = offset
-                        findHitNode(offset, size.width.toFloat(), size.height.toFloat())?.let {
-                            selected.add(it)
-                        }
+                        findHitNode(offset, size.width.toFloat(), size.height.toFloat())?.let { selected.add(it) }
                     },
                     onDrag = { change, _ ->
                         currentTouch = change.position

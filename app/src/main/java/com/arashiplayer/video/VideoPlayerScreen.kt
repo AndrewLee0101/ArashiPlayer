@@ -1,14 +1,18 @@
 package com.arashiplayer.video
 
 import android.app.Activity
-import android.app.PictureInPictureParams
+import android.content.ContentValues
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import android.media.AudioManager
+import android.media.MediaMetadataRetriever
 import android.net.Uri
-import android.util.Rational
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.TypedValue
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
@@ -31,7 +35,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -53,21 +56,33 @@ import androidx.media3.ui.PlayerView
 import com.arashiplayer.data.SubtitleStyleConfig
 import com.arashiplayer.data.formatDuration
 import com.arashiplayer.ui.theme.LocalArashiTokens
+import com.arashiplayer.ui.theme.visionGlassCapsule
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(UnstableApi::class)
 @Composable
 fun VideoPlayerScreen(
+    exoPlayer: ExoPlayer,
     videoUri: Uri,
     videoTitle: String,
+    hasPrev: Boolean,
+    hasNext: Boolean,
+    onPrevVideo: () -> Unit,
+    onNextVideo: () -> Unit,
+    onEnterMiniWindow: () -> Unit,
+    onBackgroundAudioMode: () -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
     val tokens = LocalArashiTokens.current
+    val scope = rememberCoroutineScope()
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
-    var subtitleUri by remember { mutableStateOf<Uri?>(null) }
+    var subtitleUri by remember(videoUri) { mutableStateOf<Uri?>(null) }
     var subtitleStyle by remember { mutableStateOf(SubtitleStyleConfig()) }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
     var isLongPressBoost by remember { mutableStateOf(false) }
@@ -86,9 +101,18 @@ fun VideoPlayerScreen(
     var currentPos by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
 
-    val exoPlayer = remember(videoUri, subtitleUri) {
-        ExoPlayer.Builder(context).build().apply {
-            val builder = MediaItem.Builder().setUri(videoUri)
+    // 系统返回键返回上一界面，不直接退出 App
+    BackHandler {
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        onBack()
+    }
+
+    LaunchedEffect(videoUri, subtitleUri) {
+        val currentId = exoPlayer.currentMediaItem?.mediaId
+        val targetId = "$videoUri|$subtitleUri"
+        if (currentId != targetId) {
+            val prevPos = if (currentId?.startsWith("$videoUri|") == true) exoPlayer.currentPosition else 0L
+            val builder = MediaItem.Builder().setMediaId(targetId).setUri(videoUri)
             subtitleUri?.let { subUri ->
                 val mime = when {
                     subUri.toString().endsWith(".vtt", true) -> MimeTypes.TEXT_VTT
@@ -102,9 +126,9 @@ fun VideoPlayerScreen(
                     .build()
                 builder.setSubtitleConfigurations(listOf(subConfig))
             }
-            setMediaItem(builder.build())
-            prepare()
-            playWhenReady = true
+            exoPlayer.setMediaItem(builder.build(), prevPos)
+            exoPlayer.prepare()
+            exoPlayer.playWhenReady = true
         }
     }
 
@@ -127,7 +151,7 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(hudText) {
         if (hudText != null && !isLongPressBoost) {
-            delay(1200)
+            delay(1300)
             hudText = null
         }
     }
@@ -139,13 +163,6 @@ fun VideoPlayerScreen(
         } else if (sleepRemainingSec == 0) {
             exoPlayer.pause()
             sleepRemainingSec = -1
-        }
-    }
-
-    DisposableEffect(exoPlayer) {
-        onDispose {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            exoPlayer.release()
         }
     }
 
@@ -267,60 +284,112 @@ fun VideoPlayerScreen(
             }
         )
 
+        // 中央悬浮玻璃 HUD
         hudText?.let { text ->
             Box(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(Color(0xBB151822))
-                    .padding(horizontal = 20.dp, vertical = 10.dp)
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 64.dp)
+                    .visionGlassCapsule(RoundedCornerShape(22.dp))
+                    .padding(horizontal = 18.dp, vertical = 9.dp)
             ) {
-                Text(text, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(text, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 
+        // 顶部 visionOS 分离式悬浮玻璃胶囊（无全宽黑条）
         AnimatedVisibility(
             visible = showControls && !isLocked,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter)
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Color(0xCC000000), Color.Transparent)))
-                    .statusBarsPadding()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White)
-                }
-                Text(videoTitle, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
-                IconButton(onClick = { isLooping = !isLooping }) {
-                    Icon(Icons.Default.RepeatOne, contentDescription = null, tint = if (isLooping) tokens.accent else Color.White)
-                }
-                IconButton(onClick = { showTimerSheet = true }) {
-                    Icon(Icons.Default.Timer, contentDescription = null, tint = if (sleepRemainingSec > 0) tokens.accent else Color.White)
-                }
-                IconButton(onClick = {
-                    runCatching {
-                        activity?.enterPictureInPictureMode(
-                            PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
-                        )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    IconButton(
+                        onClick = {
+                            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                            onBack()
+                        },
+                        modifier = Modifier.size(42.dp).visionGlassCapsule(CircleShape)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White)
                     }
-                }) {
-                    Icon(Icons.Default.PictureInPictureAlt, contentDescription = null, tint = Color.White)
+                    Box(
+                        modifier = Modifier
+                            .visionGlassCapsule(RoundedCornerShape(22.dp))
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                    ) {
+                        Text(videoTitle, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                    }
                 }
-                IconButton(onClick = { subtitlePicker.launch(arrayOf("*/*")) }) {
-                    Icon(Icons.Default.Subtitles, contentDescription = null, tint = Color.White)
-                }
-                IconButton(onClick = { showSubtitleSheet = true }) {
-                    Icon(Icons.Default.Tune, contentDescription = null, tint = tokens.accent)
+
+                Spacer(Modifier.width(10.dp))
+
+                // 右上角功能胶囊：定时 / 后台听音频 / 截图 / 小窗 / 外挂字幕 / 字幕样式
+                Row(
+                    modifier = Modifier
+                        .visionGlassCapsule(RoundedCornerShape(24.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { showTimerSheet = true }, modifier = Modifier.size(38.dp)) {
+                        Icon(Icons.Default.Timer, contentDescription = null, tint = if (sleepRemainingSec > 0) tokens.accent else Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(
+                        onClick = {
+                            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                            onBackgroundAudioMode()
+                        },
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(Icons.Default.Headphones, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(
+                        onClick = {
+                            val posUs = exoPlayer.currentPosition * 1000L
+                            scope.launch {
+                                val ok = captureVideoFrameToGallery(context, videoUri, posUs)
+                                hudText = if (ok) "已保存截图" else "截图失败"
+                            }
+                        },
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(
+                        onClick = {
+                            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                            onEnterMiniWindow()
+                        },
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(Icons.Default.PictureInPictureAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = { subtitlePicker.launch(arrayOf("*/*")) }, modifier = Modifier.size(38.dp)) {
+                        Icon(Icons.Default.Subtitles, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(onClick = { showSubtitleSheet = true }, modifier = Modifier.size(38.dp)) {
+                        Icon(Icons.Default.Tune, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
                 }
             }
         }
 
+        // 左侧独立圆形锁屏胶囊
         AnimatedVisibility(
             visible = showControls,
             enter = fadeIn(),
@@ -329,78 +398,106 @@ fun VideoPlayerScreen(
         ) {
             IconButton(
                 onClick = { isLocked = !isLocked },
-                modifier = Modifier.clip(CircleShape).background(Color(0x88151822))
+                modifier = Modifier.size(44.dp).visionGlassCapsule(CircleShape)
             ) {
                 Icon(if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen, contentDescription = null, tint = Color.White)
             }
         }
 
+        // 底部 visionOS 悬浮液态玻璃控制胶囊（含 上一个/暂停/下一个 + 倍速/比例/旋转）
         AnimatedVisibility(
             visible = showControls && !isLocked,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 18.dp)
         ) {
             Column(
                 modifier = Modifier
+                    .widthIn(max = 520.dp)
                     .fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xDD000000))))
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .visionGlassCapsule(RoundedCornerShape(30.dp))
+                    .padding(horizontal = 18.dp, vertical = 10.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(formatDuration(currentPos), color = Color.White, fontSize = 12.sp)
+                    Text(formatDuration(currentPos), color = Color.White.copy(alpha = 0.85f), fontSize = 11.sp)
                     Slider(
                         value = if (duration > 0L) (currentPos.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f,
                         onValueChange = { exoPlayer.seekTo((it * duration).toLong()) },
-                        colors = SliderDefaults.colors(thumbColor = tokens.accent, activeTrackColor = tokens.accent),
-                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color.White,
+                            activeTrackColor = Color.White,
+                            inactiveTrackColor = Color.White.copy(alpha = 0.25f)
+                        ),
+                        modifier = Modifier.weight(1f).height(26.dp).padding(horizontal = 8.dp)
                     )
-                    Text(formatDuration(duration), color = Color.LightGray, fontSize = 12.sp)
+                    Text(formatDuration(duration), color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
                 }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { exoPlayer.seekTo((currentPos - 10_000L).coerceAtLeast(0L)) }) {
-                            Icon(Icons.Default.Replay10, contentDescription = null, tint = Color.White)
+                        IconButton(onClick = onPrevVideo, enabled = hasPrev, modifier = Modifier.size(38.dp)) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = if (hasPrev) Color.White else Color.White.copy(alpha = 0.35f))
                         }
-                        IconButton(onClick = { if (isPlaying) exoPlayer.pause() else exoPlayer.play() }) {
-                            Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+                        IconButton(onClick = { if (isPlaying) exoPlayer.pause() else exoPlayer.play() }, modifier = Modifier.size(42.dp)) {
+                            Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(30.dp))
                         }
-                        IconButton(onClick = { exoPlayer.seekTo((currentPos + 10_000L).coerceAtMost(duration)) }) {
-                            Icon(Icons.Default.Forward10, contentDescription = null, tint = Color.White)
+                        IconButton(onClick = onNextVideo, enabled = hasNext, modifier = Modifier.size(38.dp)) {
+                            Icon(Icons.Default.SkipNext, contentDescription = null, tint = if (hasNext) Color.White else Color.White.copy(alpha = 0.35f))
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { showSpeedSheet = true }) {
-                            Text("${playbackSpeed}x", color = tokens.accent, fontWeight = FontWeight.Bold)
+
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White.copy(alpha = 0.16f))
+                                .clickable { showSpeedSheet = true }
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text("${playbackSpeed}x", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
-                        TextButton(onClick = {
-                            resizeMode = when (resizeMode) {
-                                AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                                AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-                                else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-                            }
-                            hudText = when (resizeMode) {
-                                AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "满屏裁剪"
-                                AspectRatioFrameLayout.RESIZE_MODE_FILL -> "拉伸填充"
-                                else -> "原始比例"
-                            }
-                        }) {
-                            Text("比例", color = Color.White)
+                        Text(
+                            text = "比例",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    resizeMode = when (resizeMode) {
+                                        AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                                        else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                    }
+                                    hudText = when (resizeMode) {
+                                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "满屏裁剪"
+                                        AspectRatioFrameLayout.RESIZE_MODE_FILL -> "拉伸填充"
+                                        else -> "原始比例"
+                                    }
+                                }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                        IconButton(onClick = { isLooping = !isLooping }, modifier = Modifier.size(34.dp)) {
+                            Icon(Icons.Default.RepeatOne, contentDescription = null, tint = if (isLooping) tokens.accent else Color.White, modifier = Modifier.size(18.dp))
                         }
-                        IconButton(onClick = {
-                            isLandscape = !isLandscape
-                            activity?.requestedOrientation = if (isLandscape) {
-                                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                            } else {
-                                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                            }
-                        }) {
-                            Icon(Icons.Default.ScreenRotation, contentDescription = null, tint = Color.White)
+                        IconButton(
+                            onClick = {
+                                isLandscape = !isLandscape
+                                activity?.requestedOrientation = if (isLandscape) {
+                                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                } else {
+                                    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                                }
+                            },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(Icons.Default.ScreenRotation, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                         }
                     }
                 }
@@ -410,17 +507,15 @@ fun VideoPlayerScreen(
         if (showSpeedSheet) {
             val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 2.5f, 3.0f)
             Box(
-                modifier = Modifier.fillMaxSize().background(Color(0x66000000)).clickable { showSpeedSheet = false },
+                modifier = Modifier.fillMaxSize().background(Color(0x55000000)).clickable { showSpeedSheet = false },
                 contentAlignment = Alignment.BottomCenter
             ) {
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color(0xE6181C26))
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                        .padding(20.dp)
+                        .visionGlassCapsule(RoundedCornerShape(24.dp))
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     speeds.forEach { spd ->
                         Text(
@@ -440,31 +535,29 @@ fun VideoPlayerScreen(
         if (showTimerSheet) {
             val mins = listOf(0, 15, 30, 60)
             Box(
-                modifier = Modifier.fillMaxSize().background(Color(0x66000000)).clickable { showTimerSheet = false },
+                modifier = Modifier.fillMaxSize().background(Color(0x55000000)).clickable { showTimerSheet = false },
                 contentAlignment = Alignment.BottomCenter
             ) {
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(Color(0xE6181C26))
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                        .padding(20.dp)
+                        .visionGlassCapsule(RoundedCornerShape(24.dp))
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     mins.forEach { m ->
                         Text(
-                            text = if (m == 0) "关闭定时" else "${m}分钟",
+                            text = if (m == 0) "关闭" else "${m}分钟",
                             color = Color.White,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .clickable {
                                     sleepRemainingSec = if (m == 0) -1 else m * 60
                                     hudText = if (m == 0) "已取消定时" else "${m}分钟后暂停"
                                     showTimerSheet = false
                                 }
-                                .padding(10.dp)
+                                .padding(8.dp)
                         )
                     }
                 }
@@ -481,6 +574,32 @@ fun VideoPlayerScreen(
     }
 }
 
+private suspend fun captureVideoFrameToGallery(context: Context, videoUri: Uri, positionUs: Long): Boolean =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(context, videoUri)
+            val bmp = retriever.getFrameAtTime(positionUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?: retriever.frameAtTime
+            retriever.release()
+            if (bmp == null) return@runCatching false
+
+            val name = "Arashi_${System.currentTimeMillis()}.png"
+            val values = ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, name)
+                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/ArashiPlayer")
+            }
+            val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                ?: return@runCatching false
+            context.contentResolver.openOutputStream(uri)?.use { out ->
+                bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+            bmp.recycle()
+            true
+        }.getOrDefault(false)
+    }
+
 @Composable
 private fun SubtitleStyleDialog(
     config: SubtitleStyleConfig,
@@ -492,25 +611,25 @@ private fun SubtitleStyleDialog(
         Color(0xFF7BF1A8), Color(0xFFFF99C8), Color(0xFFFFB703)
     )
     Box(
-        modifier = Modifier.fillMaxSize().background(Color(0x80000000)).clickable { onDismiss() },
+        modifier = Modifier.fillMaxSize().background(Color(0x66000000)).clickable { onDismiss() },
         contentAlignment = Alignment.BottomCenter
     ) {
         Column(
             modifier = Modifier
+                .widthIn(max = 460.dp)
                 .fillMaxWidth()
-                .padding(14.dp)
-                .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xF0181C26))
+                .padding(16.dp)
+                .visionGlassCapsule(RoundedCornerShape(28.dp))
                 .clickable(enabled = false) {}
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text("字幕样式", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("字幕样式", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 presetColors.forEach { color ->
                     Box(
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(30.dp)
                             .clip(CircleShape)
                             .background(color)
                             .clickable { onUpdate(config.copy(textColorArgb = color.toArgb())) }

@@ -1,13 +1,14 @@
 package com.arashiplayer.music
 
 import com.arashiplayer.data.LyricLine
+import kotlin.math.abs
 
 object LrcParser {
     private val lineRegex = Regex("""\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?](.*)""")
 
-    fun parse(lrcContent: String?): List<LyricLine> {
+    private fun parseRaw(lrcContent: String?): List<Pair<Long, String>> {
         if (lrcContent.isNullOrBlank()) return emptyList()
-        val lines = mutableListOf<LyricLine>()
+        val list = mutableListOf<Pair<Long, String>>()
         lrcContent.lineSequence().forEach { raw ->
             val trimmed = raw.trim()
             val matches = lineRegex.findAll(trimmed).toList()
@@ -24,11 +25,37 @@ object LrcParser {
                             3 -> msStr.toLongOrNull() ?: 0L
                             else -> 0L
                         }
-                        lines.add(LyricLine(min * 60_000 + sec * 1_000 + ms, text))
+                        list.add((min * 60_000 + sec * 1_000 + ms) to text)
                     }
                 }
             }
         }
-        return lines.sortedBy { it.timestampMs }
+        return list.sortedBy { it.first }
+    }
+
+    /**
+     * 合并原词 + 外语中文翻译 (tlyric) + 日语罗马音/汉语拼音标音 (romalrc)
+     */
+    fun parseMultilingual(
+        originalLrc: String?,
+        translatedLrc: String? = null,
+        phoneticLrc: String? = null
+    ): List<LyricLine> {
+        val orig = parseRaw(originalLrc)
+        val trans = parseRaw(translatedLrc)
+        val roma = parseRaw(phoneticLrc)
+
+        return orig.map { (ts, text) ->
+            val matchedTrans = trans.minByOrNull { abs(it.first - ts) }
+                ?.takeIf { abs(it.first - ts) <= 600L }?.second
+            val matchedRoma = roma.minByOrNull { abs(it.first - ts) }
+                ?.takeIf { abs(it.first - ts) <= 600L }?.second
+            LyricLine(
+                timestampMs = ts,
+                text = text,
+                translation = matchedTrans,
+                phonetic = matchedRoma
+            )
+        }
     }
 }

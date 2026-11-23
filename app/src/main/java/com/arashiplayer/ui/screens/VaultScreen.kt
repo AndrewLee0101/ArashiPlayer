@@ -76,17 +76,11 @@ fun VaultScreen(
 
     if (!unlocked) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .padding(horizontal = 28.dp),
+            modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 28.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(
-                modifier = Modifier.size(68.dp).arashiSurface(CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = Modifier.size(68.dp).arashiSurface(CircleShape), contentAlignment = Alignment.Center) {
                 Icon(Icons.Default.Lock, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(32.dp))
             }
             Spacer(Modifier.height(16.dp))
@@ -100,9 +94,7 @@ fun VaultScreen(
                             unlocked = true
                             authError = null
                             items = vaultManager.listVaultItems()
-                        } else {
-                            authError = "手势错误"
-                        }
+                        } else authError = "手势错误"
                     }
                 )
             } else {
@@ -123,13 +115,10 @@ fun VaultScreen(
                             pinInput += d
                             if (pinInput.length == 4) {
                                 if (vaultManager.verifyPin(pinInput)) {
-                                    unlocked = true
-                                    pinInput = ""
-                                    authError = null
+                                    unlocked = true; pinInput = ""; authError = null
                                     items = vaultManager.listVaultItems()
                                 } else {
-                                    authError = "密码错误"
-                                    pinInput = ""
+                                    authError = "密码错误"; pinInput = ""
                                 }
                             }
                         }
@@ -138,10 +127,7 @@ fun VaultScreen(
                 )
             }
 
-            authError?.let {
-                Spacer(Modifier.height(12.dp))
-                Text(it, color = Color(0xFFFF2442), fontSize = 13.sp)
-            }
+            authError?.let { Spacer(Modifier.height(12.dp)); Text(it, color = Color(0xFFFF2442), fontSize = 13.sp) }
 
             if (vaultManager.isBiometricEnabled() && activity != null) {
                 Spacer(Modifier.height(18.dp))
@@ -187,10 +173,7 @@ fun VaultScreen(
                     Icon(Icons.Default.Add, contentDescription = null, tint = tokens.accent)
                 }
                 Spacer(Modifier.width(10.dp))
-                IconButton(
-                    onClick = { showSecuritySheet = true },
-                    modifier = Modifier.arashiSurface(CircleShape)
-                ) {
+                IconButton(onClick = { showSecuritySheet = true }, modifier = Modifier.arashiSurface(CircleShape)) {
                     Icon(Icons.Default.Security, contentDescription = null, tint = tokens.textPrimary)
                 }
             }
@@ -202,10 +185,7 @@ fun VaultScreen(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(18.dp))
-                            .then(
-                                if (selected) Modifier.background(tokens.accent)
-                                else Modifier.arashiSurface(RoundedCornerShape(18.dp), elevation = 2.dp)
-                            )
+                            .then(if (selected) Modifier.background(tokens.accent) else Modifier.arashiSurface(RoundedCornerShape(18.dp), elevation = 2.dp))
                             .clickable { filterTab = idx }
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
@@ -221,10 +201,7 @@ fun VaultScreen(
                     Text("空", color = tokens.textSecondary)
                 }
             } else {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 160.dp)
-                ) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 160.dp)) {
                     items(filtered, key = { it.id }) { item ->
                         Row(
                             modifier = Modifier
@@ -265,9 +242,8 @@ fun VaultScreen(
                                 Text(formatFileSize(item.sizeBytes), color = tokens.textSecondary, fontSize = 12.sp)
                             }
                             IconButton(onClick = {
-                                if (!vaultManager.hasAllFilesAccess()) {
-                                    openAllFilesPermission(context)
-                                } else {
+                                if (!vaultManager.hasAllFilesAccess()) openAllFilesPermission(context)
+                                else {
                                     vaultManager.decryptInPlace(item)
                                     items = vaultManager.listVaultItems()
                                     onRefreshMedia()
@@ -282,31 +258,18 @@ fun VaultScreen(
         }
 
         viewingImage?.let { img ->
-            Box(
-                modifier = Modifier.fillMaxSize().background(Color.Black).clickable { viewingImage = null },
-                contentAlignment = Alignment.Center
-            ) {
-                AsyncImage(
-                    model = File(img.encryptedPath),
-                    contentDescription = img.originalName,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize()
-                )
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black).clickable { viewingImage = null }, contentAlignment = Alignment.Center) {
+                AsyncImage(model = File(img.encryptedPath), contentDescription = img.originalName, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
             }
         }
 
         if (showImportSheet) {
             VaultImportSheet(
-                videos = allVideos,
-                audios = allAudios,
-                images = allImages,
+                videos = allVideos, audios = allAudios, images = allImages,
                 onEncrypt = { path, type ->
                     val res = vaultManager.encryptInPlace(path, type)
                     if (res.isFailure) openAllFilesPermission(context)
-                    else {
-                        items = vaultManager.listVaultItems()
-                        onRefreshMedia()
-                    }
+                    else { items = vaultManager.listVaultItems(); onRefreshMedia() }
                 },
                 onDismiss = { showImportSheet = false }
             )
@@ -332,10 +295,7 @@ private fun VaultImportSheet(
 ) {
     val tokens = LocalArashiTokens.current
     var tab by remember { mutableIntStateOf(0) }
-    Box(
-        modifier = Modifier.fillMaxSize().background(Color(0x88000000)).clickable { onDismiss() },
-        contentAlignment = Alignment.BottomCenter
-    ) {
+    Box(modifier = Modifier.fillMaxSize().background(Color(0x88000000)).clickable { onDismiss() }, contentAlignment = Alignment.BottomCenter) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -366,11 +326,8 @@ private fun VaultImportSheet(
                 0 -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(videos) { v ->
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .arashiSurface(RoundedCornerShape(14.dp), elevation = 2.dp)
-                                .clickable { onEncrypt(v.path, VaultMediaType.VIDEO); onDismiss() }
-                                .padding(12.dp),
+                            modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(14.dp), elevation = 2.dp)
+                                .clickable { onEncrypt(v.path, VaultMediaType.VIDEO); onDismiss() }.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(Icons.Default.Movie, contentDescription = null, tint = tokens.accent)
@@ -386,12 +343,8 @@ private fun VaultImportSheet(
                 ) {
                     items(images) { img ->
                         AsyncImage(
-                            model = img.uri,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .aspectRatio(1f)
-                                .clip(RoundedCornerShape(12.dp))
+                            model = img.uri, contentDescription = null, contentScale = ContentScale.Crop,
+                            modifier = Modifier.aspectRatio(1f).clip(RoundedCornerShape(12.dp))
                                 .clickable { onEncrypt(img.path, VaultMediaType.IMAGE); onDismiss() }
                         )
                     }
@@ -399,11 +352,8 @@ private fun VaultImportSheet(
                 else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(audios) { a ->
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .arashiSurface(RoundedCornerShape(14.dp), elevation = 2.dp)
-                                .clickable { onEncrypt(a.path, VaultMediaType.AUDIO); onDismiss() }
-                                .padding(12.dp),
+                            modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(14.dp), elevation = 2.dp)
+                                .clickable { onEncrypt(a.path, VaultMediaType.AUDIO); onDismiss() }.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(Icons.Default.MusicNote, contentDescription = null, tint = tokens.accent)
@@ -428,17 +378,10 @@ private fun VaultSecurityDialog(
     var newPin by remember { mutableStateOf("") }
     var bioEnabled by remember { mutableStateOf(vaultManager.isBiometricEnabled()) }
 
-    Box(
-        modifier = Modifier.fillMaxSize().background(Color(0x88000000)).clickable { onDismiss() },
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier = Modifier.fillMaxSize().background(Color(0x88000000)).clickable { onDismiss() }, contentAlignment = Alignment.Center) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp)
-                .arashiSurface(RoundedCornerShape(28.dp))
-                .clickable(enabled = false) {}
-                .padding(22.dp),
+            modifier = Modifier.fillMaxWidth().padding(24.dp).arashiSurface(RoundedCornerShape(28.dp))
+                .clickable(enabled = false) {}.padding(22.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             when (mode) {
@@ -447,12 +390,7 @@ private fun VaultSecurityDialog(
                     Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         repeat(4) { i ->
-                            Box(
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .clip(CircleShape)
-                                    .background(if (i < newPin.length) tokens.accent else tokens.textPrimary.copy(alpha = 0.22f))
-                            )
+                            Box(modifier = Modifier.size(14.dp).clip(CircleShape).background(if (i < newPin.length) tokens.accent else tokens.textPrimary.copy(alpha = 0.22f)))
                         }
                     }
                     Spacer(Modifier.height(18.dp))
@@ -460,11 +398,7 @@ private fun VaultSecurityDialog(
                         onDigit = { d ->
                             if (newPin.length < 4) {
                                 newPin += d
-                                if (newPin.length == 4) {
-                                    vaultManager.setPin(newPin)
-                                    onUpdated()
-                                    onDismiss()
-                                }
+                                if (newPin.length == 4) { vaultManager.setPin(newPin); onUpdated(); onDismiss() }
                             }
                         },
                         onBackspace = { if (newPin.isNotEmpty()) newPin = newPin.dropLast(1) }
@@ -473,13 +407,7 @@ private fun VaultSecurityDialog(
                 "pattern" -> {
                     Text("设置手势解锁", color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(16.dp))
-                    PatternLockGrid(
-                        onPatternComplete = { nodes ->
-                            vaultManager.setPattern(nodes)
-                            onUpdated()
-                            onDismiss()
-                        }
-                    )
+                    PatternLockGrid(onPatternComplete = { nodes -> vaultManager.setPattern(nodes); onUpdated(); onDismiss() })
                 }
                 else -> {
                     Text("解锁方式", color = tokens.textPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
@@ -489,30 +417,17 @@ private fun VaultSecurityDialog(
                     SecurityRow(Icons.Default.Pattern, "手势解锁") { mode = "pattern" }
                     Spacer(Modifier.height(10.dp))
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .arashiSurface(RoundedCornerShape(16.dp), elevation = 2.dp)
+                        modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(16.dp), elevation = 2.dp)
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(Icons.Default.Fingerprint, contentDescription = null, tint = tokens.accent)
                         Spacer(Modifier.width(12.dp))
                         Text("指纹解锁", color = tokens.textPrimary, modifier = Modifier.weight(1f))
-                        Switch(
-                            checked = bioEnabled,
-                            onCheckedChange = {
-                                bioEnabled = it
-                                vaultManager.setBiometricEnabled(it)
-                                onUpdated()
-                            }
-                        )
+                        Switch(checked = bioEnabled, onCheckedChange = { bioEnabled = it; vaultManager.setBiometricEnabled(it); onUpdated() })
                     }
                     Spacer(Modifier.height(10.dp))
-                    SecurityRow(Icons.Default.LockOpen, "关闭密码锁") {
-                        vaultManager.clearLock()
-                        onUpdated()
-                        onDismiss()
-                    }
+                    SecurityRow(Icons.Default.LockOpen, "关闭密码锁") { vaultManager.clearLock(); onUpdated(); onDismiss() }
                 }
             }
         }
@@ -523,11 +438,8 @@ private fun VaultSecurityDialog(
 private fun SecurityRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, onClick: () -> Unit) {
     val tokens = LocalArashiTokens.current
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .arashiSurface(RoundedCornerShape(16.dp), elevation = 2.dp)
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(16.dp), elevation = 2.dp)
+            .clickable { onClick() }.padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(icon, contentDescription = null, tint = tokens.accent)
@@ -539,28 +451,18 @@ private fun SecurityRow(icon: androidx.compose.ui.graphics.vector.ImageVector, t
 @Composable
 private fun PinKeypad(onDigit: (String) -> Unit, onBackspace: () -> Unit) {
     val tokens = LocalArashiTokens.current
-    val rows = listOf(
-        listOf("1", "2", "3"),
-        listOf("4", "5", "6"),
-        listOf("7", "8", "9"),
-        listOf("", "0", "⌫")
-    )
+    val rows = listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("", "0", "⌫"))
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         rows.forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 row.forEach { key ->
-                    if (key.isEmpty()) {
-                        Spacer(Modifier.size(64.dp))
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .arashiSurface(CircleShape, elevation = 3.dp)
-                                .clickable { if (key == "⌫") onBackspace() else onDigit(key) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(key, color = tokens.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                        }
+                    if (key.isEmpty()) Spacer(Modifier.size(64.dp))
+                    else Box(
+                        modifier = Modifier.size(64.dp).arashiSurface(CircleShape, elevation = 3.dp)
+                            .clickable { if (key == "⌫") onBackspace() else onDigit(key) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(key, color = tokens.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -573,14 +475,9 @@ private fun triggerBiometric(activity: FragmentActivity, onSuccess: () -> Unit) 
     if (bm.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) != BiometricManager.BIOMETRIC_SUCCESS) return
     val executor = ContextCompat.getMainExecutor(activity)
     val prompt = BiometricPrompt(activity, executor, object : BiometricPrompt.AuthenticationCallback() {
-        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-            onSuccess()
-        }
+        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) { onSuccess() }
     })
-    val info = BiometricPrompt.PromptInfo.Builder()
-        .setTitle("指纹解锁")
-        .setNegativeButtonText("取消")
-        .build()
+    val info = BiometricPrompt.PromptInfo.Builder().setTitle("指纹解锁").setNegativeButtonText("取消").build()
     prompt.authenticate(info)
 }
 

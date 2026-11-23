@@ -2,6 +2,7 @@ package com.arashiplayer.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -47,6 +48,7 @@ fun SettingsScreen(
     var showRewardQr by remember { mutableStateOf(false) }
 
     if (showThemeStudio) {
+        BackHandler { showThemeStudio = false }
         ThemeStudioScreen(
             themeState = themeState,
             onThemeChange = onThemeChange,
@@ -67,25 +69,15 @@ fun SettingsScreen(
                 Spacer(Modifier.height(4.dp))
             }
 
-            // 分组 1：外观与媒体管理
             item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .arashiSurface(RoundedCornerShape(26.dp))
-                        .padding(vertical = 4.dp)
-                ) {
+                Column(modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(26.dp)).padding(vertical = 4.dp)) {
                     SettingsRow(
                         icon = Icons.Default.Palette,
                         iconTint = tokens.accent,
                         title = "外观与主题",
                         trailing = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    if (themeState.style == UiStyleMode.MATERIAL_YOU) "Material You" else "液态玻璃",
-                                    color = tokens.textSecondary,
-                                    fontSize = 13.sp
-                                )
+                                Text(if (themeState.style == UiStyleMode.MATERIAL_YOU) "Material You" else "液态玻璃", color = tokens.textSecondary, fontSize = 13.sp)
                                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.textSecondary)
                             }
                         },
@@ -98,12 +90,7 @@ fun SettingsScreen(
                         title = "存储与权限",
                         trailing = {
                             val granted = vaultManager.hasAllFilesAccess()
-                            Text(
-                                text = if (granted) "已开启" else "去开启",
-                                color = if (granted) tokens.accent else Color(0xFFFF2442),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                            Text(if (granted) "已开启" else "去开启", color = if (granted) tokens.accent else Color(0xFFFF2442), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         },
                         onClick = { openAllFilesPermission(context) }
                     )
@@ -112,9 +99,7 @@ fun SettingsScreen(
                         icon = Icons.Default.Refresh,
                         iconTint = tokens.accent,
                         title = "重新扫描媒体",
-                        trailing = {
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.textSecondary)
-                        },
+                        trailing = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.textSecondary) },
                         onClick = onRefreshMedia
                     )
                 }
@@ -124,14 +109,8 @@ fun SettingsScreen(
                 Text("关于与支持", color = tokens.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp, top = 4.dp))
             }
 
-            // 分组 2：联系作者（红框小红书） + 赞赏作者
             item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .arashiSurface(RoundedCornerShape(26.dp))
-                        .padding(vertical = 4.dp)
-                ) {
+                Column(modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(26.dp)).padding(vertical = 4.dp)) {
                     SettingsRow(
                         icon = Icons.Default.ChatBubbleOutline,
                         iconTint = Color(0xFFFF2442),
@@ -150,42 +129,29 @@ fun SettingsScreen(
                                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.textSecondary)
                             }
                         },
-                        onClick = {
-                            runCatching {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AUTHOR_XHS_URL)))
-                            }
-                        }
+                        onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AUTHOR_XHS_URL))) } }
                     )
                     HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
                     SettingsRow(
                         icon = Icons.Default.Favorite,
                         iconTint = Color(0xFFD9A326),
                         title = "赞赏作者",
-                        trailing = {
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.textSecondary)
-                        },
+                        trailing = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.textSecondary) },
                         onClick = { showRewardQr = true }
                     )
                 }
             }
         }
 
-        // 赞赏码弹窗（原图无损展示）
         if (showRewardQr) {
+            BackHandler { showRewardQr = false }
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0x99000000))
-                    .clickable { showRewardQr = false },
+                modifier = Modifier.fillMaxSize().background(Color(0x99000000)).clickable { showRewardQr = false },
                 contentAlignment = Alignment.Center
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp)
-                        .arashiSurface(RoundedCornerShape(28.dp))
-                        .clickable(enabled = false) {}
-                        .padding(18.dp),
+                    modifier = Modifier.fillMaxWidth().padding(24.dp).arashiSurface(RoundedCornerShape(28.dp))
+                        .clickable(enabled = false) {}.padding(18.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text("赞赏作者", color = tokens.textPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
@@ -194,9 +160,7 @@ fun SettingsScreen(
                         painter = painterResource(id = R.drawable.author_reward_qr),
                         contentDescription = "赞赏码",
                         contentScale = ContentScale.FillWidth,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(20.dp))
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
                     )
                     Spacer(Modifier.height(14.dp))
                     TextButton(onClick = { showRewardQr = false }) {
@@ -218,10 +182,7 @@ private fun SettingsRow(
 ) {
     val tokens = LocalArashiTokens.current
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 18.dp, vertical = 16.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(22.dp))
@@ -242,10 +203,7 @@ fun ThemeStudioScreen(
     var customHue by remember { mutableFloatStateOf(210f) }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .padding(horizontal = 20.dp),
+        modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 20.dp),
         contentPadding = PaddingValues(bottom = 140.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
@@ -259,51 +217,29 @@ fun ThemeStudioScreen(
             }
         }
 
-        // 1. 界面风格切换：液态玻璃 vs Material You
         item {
             Text("界面风格", color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StylePreviewCard(
-                    title = "液态玻璃",
-                    selected = themeState.style == UiStyleMode.LIQUID_GLASS,
-                    previewBrush = Brush.linearGradient(listOf(Color(0xFFE3EEF8), Color(0xFFC5DAF0))),
-                    modifier = Modifier.weight(1f)
-                ) {
+                StylePreviewCard("液态玻璃", themeState.style == UiStyleMode.LIQUID_GLASS, Brush.linearGradient(listOf(Color(0xFFE3EEF8), Color(0xFFC5DAF0))), Modifier.weight(1f)) {
                     onThemeChange(themeState.copy(style = UiStyleMode.LIQUID_GLASS))
                 }
-                StylePreviewCard(
-                    title = "Material You",
-                    selected = themeState.style == UiStyleMode.MATERIAL_YOU,
-                    previewBrush = Brush.linearGradient(listOf(Color(0xFFE5ECD8), Color(0xFFD3DFC5))),
-                    modifier = Modifier.weight(1f)
-                ) {
+                StylePreviewCard("Material You", themeState.style == UiStyleMode.MATERIAL_YOU, Brush.linearGradient(listOf(Color(0xFFE5ECD8), Color(0xFFD3DFC5))), Modifier.weight(1f)) {
                     onThemeChange(themeState.copy(style = UiStyleMode.MATERIAL_YOU))
                 }
             }
         }
 
-        // 2. 深浅模式切换
         item {
             Text("深浅模式", color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(22.dp)).padding(5.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                listOf(
-                    DarkModePref.LIGHT to "浅色",
-                    DarkModePref.DARK to "深色",
-                    DarkModePref.SYSTEM to "跟随系统"
-                ).forEach { (pref, label) ->
+            Row(modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(22.dp)).padding(5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(DarkModePref.LIGHT to "浅色", DarkModePref.DARK to "深色", DarkModePref.SYSTEM to "跟随系统").forEach { (pref, label) ->
                     val active = themeState.darkMode == pref
                     Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(18.dp))
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(18.dp))
                             .background(if (active) tokens.accent else Color.Transparent)
-                            .clickable { onThemeChange(themeState.copy(darkMode = pref)) }
-                            .padding(vertical = 10.dp),
+                            .clickable { onThemeChange(themeState.copy(darkMode = pref)) }.padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(label, color = if (active) Color.White else tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -312,40 +248,26 @@ fun ThemeStudioScreen(
             }
         }
 
-        // 3. 主题配色（6套潮流预设 + 自定义色相）
         item {
             Text("主题配色", color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(12.dp))
-            Column(
-                modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(24.dp)).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(24.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     ThemePresets.take(4).forEach { preset ->
-                        ColorSwatchItem(
-                            name = preset.name,
-                            color = preset.accent,
-                            selected = themeState.customAccentArgb == null && themeState.presetId == preset.id
-                        ) {
+                        ColorSwatchItem(preset.name, preset.accent, themeState.customAccentArgb == null && themeState.presetId == preset.id) {
                             onThemeChange(themeState.copy(presetId = preset.id, customAccentArgb = null, dynamicMonet = false))
                         }
                     }
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                     ThemePresets.drop(4).forEach { preset ->
-                        ColorSwatchItem(
-                            name = preset.name,
-                            color = preset.accent,
-                            selected = themeState.customAccentArgb == null && themeState.presetId == preset.id
-                        ) {
+                        ColorSwatchItem(preset.name, preset.accent, themeState.customAccentArgb == null && themeState.presetId == preset.id) {
                             onThemeChange(themeState.copy(presetId = preset.id, customAccentArgb = null, dynamicMonet = false))
                         }
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
+                            modifier = Modifier.size(44.dp).clip(CircleShape)
                                 .background(Brush.sweepGradient(listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)))
                                 .clickable { showCustomHue = !showCustomHue },
                             contentAlignment = Alignment.Center
@@ -356,7 +278,6 @@ fun ThemeStudioScreen(
                         Text("自定义", color = tokens.textSecondary, fontSize = 12.sp)
                     }
                 }
-
                 if (showCustomHue) {
                     val previewColor = Color.hsv(customHue, 0.72f, 0.92f)
                     Slider(
@@ -372,12 +293,8 @@ fun ThemeStudioScreen(
             }
         }
 
-        // 4. 玻璃通透度 & Material You 动态取色开关
         item {
-            Column(
-                modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(24.dp)).padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(24.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("玻璃通透度", color = tokens.textPrimary, fontWeight = FontWeight.Medium)
                     Text("${(themeState.glassTransparency * 100).toInt()}%", color = tokens.textSecondary, fontSize = 13.sp)
@@ -394,12 +311,7 @@ fun ThemeStudioScreen(
                     Switch(
                         checked = themeState.dynamicMonet,
                         onCheckedChange = {
-                            onThemeChange(
-                                themeState.copy(
-                                    dynamicMonet = it,
-                                    style = if (it) UiStyleMode.MATERIAL_YOU else themeState.style
-                                )
-                            )
+                            onThemeChange(themeState.copy(dynamicMonet = it, style = if (it) UiStyleMode.MATERIAL_YOU else themeState.style))
                         }
                     )
                 }
@@ -409,29 +321,15 @@ fun ThemeStudioScreen(
 }
 
 @Composable
-private fun StylePreviewCard(
-    title: String,
-    selected: Boolean,
-    previewBrush: Brush,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
+private fun StylePreviewCard(title: String, selected: Boolean, previewBrush: Brush, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val tokens = LocalArashiTokens.current
     Column(
-        modifier = modifier
-            .arashiSurface(RoundedCornerShape(22.dp))
+        modifier = modifier.arashiSurface(RoundedCornerShape(22.dp))
             .then(if (selected) Modifier.border(2.dp, tokens.accent, RoundedCornerShape(22.dp)) else Modifier)
-            .clickable { onClick() }
-            .padding(12.dp),
+            .clickable { onClick() }.padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(82.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(previewBrush)
-        )
+        Box(modifier = Modifier.fillMaxWidth().height(82.dp).clip(RoundedCornerShape(16.dp)).background(previewBrush))
         Spacer(Modifier.height(8.dp))
         Text(title, color = tokens.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
     }
@@ -442,14 +340,9 @@ private fun ColorSwatchItem(name: String, color: Color, selected: Boolean, onCli
     val tokens = LocalArashiTokens.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
+            modifier = Modifier.size(44.dp).clip(CircleShape)
                 .then(if (selected) Modifier.border(3.dp, tokens.textPrimary, CircleShape) else Modifier)
-                .padding(3.dp)
-                .clip(CircleShape)
-                .background(color)
-                .clickable { onClick() }
+                .padding(3.dp).clip(CircleShape).background(color).clickable { onClick() }
         )
         Spacer(Modifier.height(4.dp))
         Text(name, color = tokens.textSecondary, fontSize = 12.sp)

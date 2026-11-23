@@ -62,7 +62,7 @@ data class ArashiThemeState(
 }
 
 class ThemePrefsStore(context: Context) {
-    private val prefs = context.getSharedPreferences("arashi_theme_v3", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences("arashi_theme_v4", Context.MODE_PRIVATE)
 
     fun load(): ArashiThemeState {
         val style = runCatching {
@@ -108,10 +108,10 @@ val LocalArashiTokens = staticCompositionLocalOf {
         isDark = false,
         style = UiStyleMode.LIQUID_GLASS,
         accent = Color(0xFF0A84FF),
-        background = Color(0xFFEEF3F8),
-        surfaceCard = Color(0xCCFFFFFF),
+        background = Color(0xFFF3F6FA),
+        surfaceCard = Color(0xDDFFFFFF),
         textPrimary = Color(0xFF121620),
-        textSecondary = Color(0xFF5D6678),
+        textSecondary = Color(0xFF6B7384),
         glassTransparency = 0.65f
     )
 }
@@ -148,8 +148,8 @@ fun ArashiPlayerTheme(
         else -> lightColorScheme(
             primary = chosenAccent,
             secondary = chosenAccent.copy(alpha = 0.75f),
-            background = if (themeState.style == UiStyleMode.MATERIAL_YOU) Color(0xFFF3F4EB) else Color(0xFFEAF0F6),
-            surface = if (themeState.style == UiStyleMode.MATERIAL_YOU) Color(0xFFFFFFFF) else Color(0xFFF7FAFD),
+            background = if (themeState.style == UiStyleMode.MATERIAL_YOU) Color(0xFFF3F4EB) else Color(0xFFF2F6FA),
+            surface = Color.White,
             onBackground = Color(0xFF11151E),
             onSurface = Color(0xFF11151E)
         )
@@ -160,23 +160,15 @@ fun ArashiPlayerTheme(
         style = themeState.style,
         accent = if (useDynamic) colorScheme.primary else chosenAccent,
         background = colorScheme.background,
-        surfaceCard = if (themeState.style == UiStyleMode.MATERIAL_YOU) {
-            colorScheme.surfaceVariant
-        } else if (isDark) {
-            Color(0xFF1B2130)
-        } else {
-            Color.White
-        },
+        surfaceCard = if (themeState.style == UiStyleMode.MATERIAL_YOU) colorScheme.surfaceVariant
+        else if (isDark) Color(0xFF191F2E) else Color.White,
         textPrimary = colorScheme.onBackground,
-        textSecondary = colorScheme.onBackground.copy(alpha = 0.62f),
+        textSecondary = colorScheme.onBackground.copy(alpha = 0.58f),
         glassTransparency = themeState.glassTransparency
     )
 
     CompositionLocalProvider(LocalArashiTokens provides tokens) {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            content = content
-        )
+        MaterialTheme(colorScheme = colorScheme, content = content)
     }
 }
 
@@ -189,21 +181,13 @@ fun ArashiBackdrop(
     val bgBrush = if (tokens.style == UiStyleMode.LIQUID_GLASS) {
         if (tokens.isDark) {
             Brush.linearGradient(
-                colors = listOf(
-                    Color(0xFF0B101B),
-                    tokens.accent.copy(alpha = 0.14f),
-                    Color(0xFF0E1320)
-                ),
+                colors = listOf(Color(0xFF0A0E17), tokens.accent.copy(alpha = 0.10f), Color(0xFF0E1320)),
                 start = Offset(0f, 0f),
                 end = Offset(1000f, 1800f)
             )
         } else {
             Brush.linearGradient(
-                colors = listOf(
-                    Color(0xFFF1F5FA),
-                    tokens.accent.copy(alpha = 0.08f),
-                    Color(0xFFE5ECF4)
-                ),
+                colors = listOf(Color(0xFFF6F8FC), tokens.accent.copy(alpha = 0.05f), Color(0xFFEDF2F8)),
                 start = Offset(0f, 0f),
                 end = Offset(1000f, 1800f)
             )
@@ -212,35 +196,43 @@ fun ArashiBackdrop(
         Brush.verticalGradient(listOf(tokens.background, tokens.background))
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(bgBrush)
-    ) {
+    Box(modifier = modifier.fillMaxSize().background(bgBrush)) {
         content()
     }
 }
 
+/**
+ * 纯净通透的液态玻璃胶囊修饰符（极细高光描边，无厚重金属边框）
+ */
 @Composable
 fun Modifier.arashiSurface(
     shape: Shape = RoundedCornerShape(24.dp),
-    elevation: Dp = 6.dp
+    elevation: Dp = 4.dp
 ): Modifier {
     val tokens = LocalArashiTokens.current
     return if (tokens.style == UiStyleMode.LIQUID_GLASS) {
-        val opacity = (1.12f - tokens.glassTransparency * 0.55f).coerceIn(0.32f, 0.90f)
-        val fillTop = if (tokens.isDark) Color.White.copy(alpha = opacity * 0.16f) else Color.White.copy(alpha = opacity)
-        val fillBottom = if (tokens.isDark) Color.White.copy(alpha = opacity * 0.07f) else Color.White.copy(alpha = (opacity - 0.18f).coerceAtLeast(0.28f))
-        val borderTop = if (tokens.isDark) Color.White.copy(alpha = 0.34f) else Color.White.copy(alpha = 0.92f)
-        val borderBottom = if (tokens.isDark) Color.White.copy(alpha = 0.08f) else Color(0x22000000)
+        val opacity = (1.08f - tokens.glassTransparency * 0.45f).coerceIn(0.42f, 0.92f)
+        val fillTop = if (tokens.isDark) Color.White.copy(alpha = opacity * 0.14f) else Color.White.copy(alpha = opacity)
+        val fillBottom = if (tokens.isDark) Color.White.copy(alpha = opacity * 0.06f) else Color.White.copy(alpha = (opacity - 0.14f).coerceAtLeast(0.38f))
+        val borderCol = if (tokens.isDark) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.85f)
         this
-            .shadow(elevation, shape, ambientColor = Color(0x18000000), spotColor = Color(0x22000000))
+            .shadow(elevation, shape, ambientColor = Color(0x12000000), spotColor = Color(0x18000000))
             .clip(shape)
             .background(Brush.linearGradient(listOf(fillTop, fillBottom)))
-            .border(1.dp, Brush.linearGradient(listOf(borderTop, borderBottom)), shape)
+            .border(0.75.dp, borderCol, shape)
     } else {
-        this
-            .clip(shape)
-            .background(tokens.surfaceCard)
+        this.clip(shape).background(tokens.surfaceCard)
     }
 }
+
+/**
+ * visionOS 播放页悬浮玻璃胶囊（用于视频与音乐播放控制栏）
+ */
+fun Modifier.visionGlassCapsule(shape: Shape = RoundedCornerShape(28.dp)): Modifier = this
+    .clip(shape)
+    .background(
+        Brush.linearGradient(
+            listOf(Color(0x52161A26), Color(0x38161A26))
+        )
+    )
+    .border(0.85.dp, Color.White.copy(alpha = 0.32f), shape)

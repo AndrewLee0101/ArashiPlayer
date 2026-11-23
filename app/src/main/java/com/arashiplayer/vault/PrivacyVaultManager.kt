@@ -24,7 +24,7 @@ data class VaultItem(
 
 class PrivacyVaultManager(private val context: Context) {
 
-    private val prefs = context.getSharedPreferences("arashi_vault_v3", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences("arashi_vault_v4", Context.MODE_PRIVATE)
     private val indexKey = "vault_items_json"
     private val lockTypeKey = "vault_lock_type"
     private val pinHashKey = "vault_pin_hash"
@@ -171,7 +171,7 @@ class PrivacyVaultManager(private val context: Context) {
     }
 
     private fun sha256(input: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest("arashi_v3_$input".toByteArray())
+        val digest = MessageDigest.getInstance("SHA-256").digest("arashi_v4_$input".toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
     }
 }

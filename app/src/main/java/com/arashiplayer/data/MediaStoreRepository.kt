@@ -2,10 +2,12 @@ package com.arashiplayer.data
 
 import android.content.ContentUris
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class MediaStoreRepository(private val context: Context) {
 
@@ -24,10 +26,7 @@ class MediaStoreRepository(private val context: Context) {
         runCatching {
             context.contentResolver.query(
                 MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                projection,
-                null,
-                null,
-                sortOrder
+                projection, null, null, sortOrder
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
                 val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
@@ -39,7 +38,7 @@ class MediaStoreRepository(private val context: Context) {
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
                     val path = cursor.getString(dataCol) ?: ""
-                    if (path.endsWith(".arashi_enc")) continue
+                    if (path.endsWith(".arashi_enc") || !File(path).exists()) continue
                     val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
                     result.add(
                         LocalVideo(
@@ -75,10 +74,7 @@ class MediaStoreRepository(private val context: Context) {
         runCatching {
             context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                projection,
-                selection,
-                null,
-                sortOrder
+                projection, selection, null, sortOrder
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                 val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
@@ -90,7 +86,7 @@ class MediaStoreRepository(private val context: Context) {
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
                     val path = cursor.getString(dataCol) ?: ""
-                    if (path.endsWith(".arashi_enc")) continue
+                    if (path.endsWith(".arashi_enc") || !File(path).exists()) continue
                     val albumId = cursor.getLong(albumIdCol)
                     val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
                     val artUri = ContentUris.withAppendedId(
@@ -127,10 +123,7 @@ class MediaStoreRepository(private val context: Context) {
         runCatching {
             context.contentResolver.query(
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                projection,
-                null,
-                null,
-                sortOrder
+                projection, null, null, sortOrder
             )?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
                 val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
@@ -139,7 +132,7 @@ class MediaStoreRepository(private val context: Context) {
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
                     val path = cursor.getString(dataCol) ?: ""
-                    if (path.endsWith(".arashi_enc")) continue
+                    if (path.endsWith(".arashi_enc") || !File(path).exists()) continue
                     val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
                     result.add(
                         LocalImage(
@@ -154,5 +147,24 @@ class MediaStoreRepository(private val context: Context) {
             }
         }
         result
+    }
+
+    fun renameMediaFile(oldPath: String, newName: String): Boolean {
+        val src = File(oldPath)
+        if (!src.exists() || newName.isBlank()) return false
+        val ext = src.extension
+        val finalName = if (ext.isNotEmpty() && !newName.endsWith(".$ext", true)) "$newName.$ext" else newName
+        val dst = File(src.parentFile, finalName)
+        val ok = src.renameTo(dst)
+        if (ok) {
+            MediaScannerConnection.scanFile(context, arrayOf(src.absolutePath, dst.absolutePath), null, null)
+        }
+        return ok
+    }
+
+    fun deleteMediaFile(path: String, uri: Uri): Boolean {
+        val deleted = runCatching { File(path).delete() }.getOrDefault(false)
+        runCatching { context.contentResolver.delete(uri, null, null) }
+        return deleted
     }
 }
