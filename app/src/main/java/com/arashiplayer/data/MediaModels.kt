@@ -1,6 +1,7 @@
 package com.arashiplayer.data
 
 import android.net.Uri
+import java.io.File
 
 data class LocalVideo(
     val id: Long,
@@ -12,6 +13,9 @@ data class LocalVideo(
     val height: Int,
     val sizeBytes: Long
 ) {
+    val folderName: String
+        get() = File(path).parentFile?.name ?: "默认"
+
     val resolutionBadge: String
         get() = when {
             height >= 2160 || width >= 3840 -> "4K"

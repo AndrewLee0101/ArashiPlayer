@@ -46,6 +46,7 @@ fun AppleMusicPlayerSheet(
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
+    val tokens = LocalArashiTokens.current
     val scope = rememberCoroutineScope()
     val matcher = remember { OnlineTagMatcher(context) }
 
@@ -59,7 +60,6 @@ fun AppleMusicPlayerSheet(
     var candidates by remember { mutableStateOf<List<OnlineTagResult>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
 
-    // 自动匹配一次（若尚未缓存）
     LaunchedEffect(track.id) {
         if (savedTag == null) {
             val found = matcher.searchCandidates(searchKeyword).firstOrNull()
@@ -82,9 +82,9 @@ fun AppleMusicPlayerSheet(
         }
     }
 
-    val coverSize by animateDpAsState(targetValue = if (isPlaying) 292.dp else 252.dp, label = "cover")
+    val coverSize by animateDpAsState(targetValue = if (isPlaying) 288.dp else 248.dp, label = "cover")
 
-    LiquidGlassBackdrop {
+    ArashiBackdrop {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -98,12 +98,12 @@ fun AppleMusicPlayerSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onClose, modifier = Modifier.liquidGlass(CircleShape)) {
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = Color.White)
+                IconButton(onClick = onClose, modifier = Modifier.arashiSurface(CircleShape)) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = tokens.textPrimary)
                 }
                 Row(
                     modifier = Modifier
-                        .liquidGlass(RoundedCornerShape(20.dp))
+                        .arashiSurface(RoundedCornerShape(20.dp))
                         .clickable {
                             showSearchDialog = true
                             scope.launch {
@@ -115,9 +115,9 @@ fun AppleMusicPlayerSheet(
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = GlassCyan, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("匹配标签", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("匹配标签", color = tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
 
@@ -129,7 +129,7 @@ fun AppleMusicPlayerSheet(
             ) {
                 if (showLyrics) {
                     if (lyrics.isEmpty()) {
-                        Text("暂无歌词", color = TextSecondary)
+                        Text("暂无歌词", color = tokens.textSecondary)
                     } else {
                         LazyColumn(
                             state = lyricListState,
@@ -140,13 +140,11 @@ fun AppleMusicPlayerSheet(
                                 val active = idx == activeLyricIndex
                                 Text(
                                     text = line.text,
-                                    color = if (active) Color.White else Color.White.copy(alpha = 0.42f),
+                                    color = if (active) tokens.textPrimary else tokens.textSecondary.copy(alpha = 0.5f),
                                     fontSize = if (active) 22.sp else 18.sp,
                                     fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                                     lineHeight = 30.sp,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { onSeekTo(line.timestampMs) }
+                                    modifier = Modifier.fillMaxWidth().clickable { onSeekTo(line.timestampMs) }
                                 )
                             }
                         }
@@ -158,44 +156,23 @@ fun AppleMusicPlayerSheet(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .size(coverSize)
-                            .shadow(28.dp, RoundedCornerShape(28.dp))
+                            .shadow(22.dp, RoundedCornerShape(28.dp))
                             .clip(RoundedCornerShape(28.dp))
-                            .background(Color(0xFF1B2033))
+                            .background(tokens.surfaceCard)
                     )
                 }
             }
 
             Spacer(Modifier.height(16.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = savedTag?.title?.ifBlank { track.title } ?: track.title,
-                        color = Color.White,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
+                    Text(savedTag?.title?.ifBlank { track.title } ?: track.title, color = tokens.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = savedTag?.artist?.ifBlank { track.artist } ?: track.artist,
-                        color = TextSecondary,
-                        fontSize = 15.sp,
-                        maxLines = 1
-                    )
+                    Text(savedTag?.artist?.ifBlank { track.artist } ?: track.artist, color = tokens.textSecondary, fontSize = 15.sp, maxLines = 1)
                 }
-                IconButton(
-                    onClick = { showLyrics = !showLyrics },
-                    modifier = Modifier.liquidGlass(CircleShape)
-                ) {
-                    Icon(
-                        Icons.Default.Lyrics,
-                        contentDescription = null,
-                        tint = if (showLyrics) GlassRose else Color.White
-                    )
+                IconButton(onClick = { showLyrics = !showLyrics }, modifier = Modifier.arashiSurface(CircleShape)) {
+                    Icon(Icons.Default.Lyrics, contentDescription = null, tint = if (showLyrics) tokens.accent else tokens.textPrimary)
                 }
             }
 
@@ -204,11 +181,11 @@ fun AppleMusicPlayerSheet(
             Slider(
                 value = if (durationMs > 0L) (currentPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f,
                 onValueChange = { onSeekTo((it * durationMs).toLong()) },
-                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White)
+                colors = SliderDefaults.colors(thumbColor = tokens.accent, activeTrackColor = tokens.accent)
             )
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(formatDuration(currentPositionMs), color = TextSecondary, fontSize = 12.sp)
-                Text(formatDuration(durationMs), color = TextSecondary, fontSize = 12.sp)
+                Text(formatDuration(currentPositionMs), color = tokens.textSecondary, fontSize = 12.sp)
+                Text(formatDuration(durationMs), color = tokens.textSecondary, fontSize = 12.sp)
             }
 
             Spacer(Modifier.height(12.dp))
@@ -219,36 +196,24 @@ fun AppleMusicPlayerSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onPrev, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = Color.White, modifier = Modifier.size(38.dp))
+                    Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = tokens.textPrimary, modifier = Modifier.size(38.dp))
                 }
                 IconButton(
                     onClick = onTogglePlay,
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(CircleShape)
-                        .background(Color.White)
+                    modifier = Modifier.size(72.dp).clip(CircleShape).background(tokens.accent)
                 ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = Color.Black,
-                        modifier = Modifier.size(40.dp)
-                    )
+                    Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
                 }
                 IconButton(onClick = onNext, modifier = Modifier.size(56.dp)) {
-                    Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White, modifier = Modifier.size(38.dp))
+                    Icon(Icons.Default.SkipNext, contentDescription = null, tint = tokens.textPrimary, modifier = Modifier.size(38.dp))
                 }
             }
             Spacer(Modifier.height(10.dp))
         }
 
-        // 音乐标签搜索匹配弹窗
         if (showSearchDialog) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0x99000000))
-                    .clickable { showSearchDialog = false },
+                modifier = Modifier.fillMaxSize().background(Color(0x88000000)).clickable { showSearchDialog = false },
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -256,11 +221,11 @@ fun AppleMusicPlayerSheet(
                         .fillMaxWidth()
                         .padding(20.dp)
                         .heightIn(max = 520.dp)
-                        .liquidGlass(RoundedCornerShape(28.dp), alphaTop = 0.24f, alphaBottom = 0.12f)
+                        .arashiSurface(RoundedCornerShape(28.dp))
                         .clickable(enabled = false) {}
                         .padding(18.dp)
                 ) {
-                    Text("匹配封面与歌词", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("匹配封面与歌词", color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(10.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
@@ -278,15 +243,15 @@ fun AppleMusicPlayerSheet(
                                     isSearching = false
                                 }
                             },
-                            modifier = Modifier.liquidGlass(CircleShape)
+                            modifier = Modifier.arashiSurface(CircleShape)
                         ) {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = GlassCyan)
+                            Icon(Icons.Default.Search, contentDescription = null, tint = tokens.accent)
                         }
                     }
                     Spacer(Modifier.height(12.dp))
                     if (isSearching) {
                         Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(color = GlassCyan)
+                            CircularProgressIndicator(color = tokens.accent)
                         }
                     } else {
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -294,7 +259,7 @@ fun AppleMusicPlayerSheet(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .liquidGlass(RoundedCornerShape(16.dp))
+                                        .arashiSurface(RoundedCornerShape(16.dp))
                                         .clickable {
                                             scope.launch {
                                                 val full = matcher.fetchLyricsForCandidate(item)
@@ -315,8 +280,8 @@ fun AppleMusicPlayerSheet(
                                     )
                                     Spacer(Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                                        Text("${item.artist} · ${item.source}", color = TextSecondary, fontSize = 12.sp, maxLines = 1)
+                                        Text(item.title, color = tokens.textPrimary, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                        Text("${item.artist} · ${item.source}", color = tokens.textSecondary, fontSize = 12.sp, maxLines = 1)
                                     }
                                 }
                             }

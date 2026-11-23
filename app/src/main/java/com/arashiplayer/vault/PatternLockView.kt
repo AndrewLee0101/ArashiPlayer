@@ -6,21 +6,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import com.arashiplayer.ui.theme.GlassCyan
+import com.arashiplayer.ui.theme.LocalArashiTokens
 import kotlin.math.hypot
 
-/**
- * 液态玻璃九宫格手势解锁组件
- */
 @Composable
 fun PatternLockGrid(
     modifier: Modifier = Modifier,
     onPatternComplete: (List<Int>) -> Unit
 ) {
+    val tokens = LocalArashiTokens.current
     val selected = remember { mutableStateListOf<Int>() }
     var currentTouch by remember { mutableStateOf<Offset?>(null) }
 
@@ -44,9 +41,7 @@ fun PatternLockGrid(
                     },
                     onDragEnd = {
                         currentTouch = null
-                        if (selected.size >= 4) {
-                            onPatternComplete(selected.toList())
-                        }
+                        if (selected.size >= 4) onPatternComplete(selected.toList())
                         selected.clear()
                     },
                     onDragCancel = {
@@ -57,11 +52,9 @@ fun PatternLockGrid(
             }
     ) {
         val centers = getNodeCenters(size.width, size.height)
-
-        // 连线
         for (i in 0 until selected.size - 1) {
             drawLine(
-                color = GlassCyan.copy(alpha = 0.85f),
+                color = tokens.accent.copy(alpha = 0.85f),
                 start = centers[selected[i]],
                 end = centers[selected[i + 1]],
                 strokeWidth = 8f,
@@ -70,24 +63,22 @@ fun PatternLockGrid(
         }
         if (selected.isNotEmpty() && currentTouch != null) {
             drawLine(
-                color = GlassCyan.copy(alpha = 0.45f),
+                color = tokens.accent.copy(alpha = 0.45f),
                 start = centers[selected.last()],
                 end = currentTouch!!,
                 strokeWidth = 6f,
                 cap = StrokeCap.Round
             )
         }
-
-        // 九宫格节点
         centers.forEachIndexed { idx, center ->
             val isSelected = idx in selected
             drawCircle(
-                color = if (isSelected) GlassCyan.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.10f),
+                color = if (isSelected) tokens.accent.copy(alpha = 0.24f) else tokens.textPrimary.copy(alpha = 0.10f),
                 radius = 30f,
                 center = center
             )
             drawCircle(
-                color = if (isSelected) GlassCyan else Color.White.copy(alpha = 0.55f),
+                color = if (isSelected) tokens.accent else tokens.textPrimary.copy(alpha = 0.45f),
                 radius = if (isSelected) 12f else 8f,
                 center = center
             )

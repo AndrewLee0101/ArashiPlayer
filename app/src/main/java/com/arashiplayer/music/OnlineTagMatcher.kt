@@ -12,11 +12,6 @@ import org.json.JSONObject
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
-/**
- * 多源在线封面与歌词匹配器（参考「音乐标签」）：
- * 优先直连网易云音乐公开接口（国内直连快、中/日/英曲库全），
- * 自动兜底 LRCLIB + iTunes，并支持本地持久化缓存。
- */
 class OnlineTagMatcher(private val context: Context) {
 
     private val client = OkHttpClient.Builder()
@@ -57,18 +52,15 @@ class OnlineTagMatcher(private val context: Context) {
 
     suspend fun searchCandidates(keyword: String): List<OnlineTagResult> = withContext(Dispatchers.IO) {
         val cleanKeyword = keyword
-            .replace(Regex("\.(mp3|flac|wav|m4a|aac|ogg)$", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""\.(mp3|flac|wav|m4a|aac|ogg)$""", RegexOption.IGNORE_CASE), "")
             .replace("<unknown>", "")
             .trim()
         if (cleanKeyword.isBlank()) return@withContext emptyList()
 
         val list = mutableListOf<OnlineTagResult>()
-        // 1. 网易云音乐公开搜索（国内稳定快速）
         list.addAll(searchNetEase(cleanKeyword))
-
-        // 2. 如果网易云无结果，使用 iTunes + LRCLIB 兜底
         if (list.isEmpty()) {
-            list.addAll(searchItunesAndLrclib(cleanKeyword))
+            list.addAll(searchItunes(cleanKeyword))
         }
         list
     }
@@ -149,7 +141,7 @@ class OnlineTagMatcher(private val context: Context) {
         }.getOrNull()
     }
 
-    private fun searchItunesAndLrclib(keyword: String): List<OnlineTagResult> {
+    private fun searchItunes(keyword: String): List<OnlineTagResult> {
         val results = mutableListOf<OnlineTagResult>()
         val encoded = URLEncoder.encode(keyword, "UTF-8")
         runCatching {
@@ -186,7 +178,7 @@ class OnlineTagMatcher(private val context: Context) {
         return runCatching {
             val req = Request.Builder()
                 .url("https://lrclib.net/api/search?q=$encoded")
-                .header("User-Agent", "ArashiPlayer/2.0")
+                .header("User-Agent", "ArashiPlayer/3.0")
                 .build()
             client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@use null

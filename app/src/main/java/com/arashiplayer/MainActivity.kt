@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -35,10 +36,7 @@ import coil.decode.VideoFrameDecoder
 import com.arashiplayer.data.*
 import com.arashiplayer.music.AppleMusicPlayerSheet
 import com.arashiplayer.music.OnlineTagMatcher
-import com.arashiplayer.ui.screens.MusicLibraryScreen
-import com.arashiplayer.ui.screens.VaultScreen
-import com.arashiplayer.ui.screens.VideoLibraryScreen
-import com.arashiplayer.ui.screens.openAllFilesPermission
+import com.arashiplayer.ui.screens.*
 import com.arashiplayer.ui.theme.*
 import com.arashiplayer.vault.PrivacyVaultManager
 import com.arashiplayer.vault.VaultMediaType
@@ -52,7 +50,6 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // 注册 VideoFrameDecoder，确保所有本地视频显示高清缩略图
         val imageLoader = ImageLoader.Builder(this)
             .components { add(VideoFrameDecoder.Factory()) }
             .crossfade(true)
@@ -60,16 +57,29 @@ class MainActivity : FragmentActivity() {
         Coil.setImageLoader(imageLoader)
 
         setContent {
-            ArashiPlayerTheme {
-                ArashiPlayerApp()
+            val themeStore = remember { ThemePrefsStore(this) }
+            var themeState by remember { mutableStateOf(themeStore.load()) }
+
+            ArashiPlayerTheme(themeState = themeState) {
+                ArashiPlayerApp(
+                    themeState = themeState,
+                    onThemeChange = {
+                        themeState = it
+                        themeStore.save(it)
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-fun ArashiPlayerApp() {
+fun ArashiPlayerApp(
+    themeState: ArashiThemeState,
+    onThemeChange: (ArashiThemeState) -> Unit
+) {
     val context = LocalContext.current
+    val tokens = LocalArashiTokens.current
     val scope = rememberCoroutineScope()
     val repo = remember { MediaStoreRepository(context) }
     val vaultManager = remember { PrivacyVaultManager(context) }
@@ -85,6 +95,8 @@ fun ArashiPlayerApp() {
     var images by remember { mutableStateOf<List<LocalImage>>(emptyList()) }
     var currentTab by remember { mutableIntStateOf(0) }
     var tagVersion by remember { mutableIntStateOf(0) }
+    var showSearchBar by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
 
     var activeVideo by remember { mutableStateOf<Pair<Uri, String>?>(null) }
     var activeTrack by remember { mutableStateOf<LocalAudio?>(null) }
@@ -132,11 +144,7 @@ fun ArashiPlayerApp() {
     }
 
     activeVideo?.let { (uri, title) ->
-        VideoPlayerScreen(
-            videoUri = uri,
-            videoTitle = title,
-            onBack = { activeVideo = null }
-        )
+        VideoPlayerScreen(videoUri = uri, videoTitle = title, onBack = { activeVideo = null })
         return
     }
 
@@ -175,15 +183,15 @@ fun ArashiPlayerApp() {
         return
     }
 
-    LiquidGlassBackdrop {
+    ArashiBackdrop {
         when (currentTab) {
             0 -> VideoLibraryScreen(
                 videos = videos,
+                searchQuery = searchQuery,
                 onVideoClick = { activeVideo = it.uri to it.title },
                 onEncryptVideo = { v ->
-                    if (!vaultManager.hasAllFilesAccess()) {
-                        openAllFilesPermission(context)
-                    } else {
+                    if (!vaultManager.hasAllFilesAccess()) openAllFilesPermission(context)
+                    else {
                         vaultManager.encryptInPlace(v.path, VaultMediaType.VIDEO)
                         refreshAll()
                     }
@@ -192,6 +200,7 @@ fun ArashiPlayerApp() {
             )
             1 -> MusicLibraryScreen(
                 audios = audios,
+                searchQuery = searchQuery,
                 tagVersion = tagVersion,
                 onAudioClick = { audio ->
                     activeTrack = audio
@@ -201,9 +210,8 @@ fun ArashiPlayerApp() {
                     showFullMusicSheet = true
                 },
                 onEncryptAudio = { a ->
-                    if (!vaultManager.hasAllFilesAccess()) {
-                        openAllFilesPermission(context)
-                    } else {
+                    if (!vaultManager.hasAllFilesAccess()) openAllFilesPermission(context)
+                    else {
                         vaultManager.encryptInPlace(a.path, VaultMediaType.AUDIO)
                         refreshAll()
                     }
@@ -236,48 +244,48 @@ fun ArashiPlayerApp() {
                     showFullMusicSheet = true
                 }
             )
-            else -> Column(
+            else -> SettingsScreen(
+                themeState = themeState,
+                onThemeChange = onThemeChange,
+                vaultManager = vaultManager,
+                onRefreshMedia = { refreshAll() }
+            )
+        }
+
+        // 顶部搜索弹出条
+        if (showSearchBar) {
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .fillMaxWidth()
+                    .arashiSurface(RoundedCornerShape(24.dp))
+                    .padding(horizontal = 14.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("我的", color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .liquidGlass(RoundedCornerShape(22.dp))
-                        .clickable { openAllFilesPermission(context) }
-                        .padding(18.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.FolderOpen, contentDescription = null, tint = GlassCyan)
-                    Spacer(Modifier.width(12.dp))
-                    Text("所有文件访问权限", color = TextPrimary, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                    Text(
-                        if (vaultManager.hasAllFilesAccess()) "已开启" else "去开启",
-                        color = if (vaultManager.hasAllFilesAccess()) GlassCyan else GlassRose,
-                        fontSize = 13.sp
-                    )
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .liquidGlass(RoundedCornerShape(22.dp))
-                        .clickable { refreshAll() }
-                        .padding(18.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, tint = GlassViolet)
-                    Spacer(Modifier.width(12.dp))
-                    Text("重新扫描本地媒体", color = TextPrimary, fontWeight = FontWeight.Medium)
+                Icon(Icons.Default.Search, contentDescription = null, tint = tokens.textSecondary)
+                Spacer(Modifier.width(8.dp))
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("搜索视频或音乐") },
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    ),
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = { searchQuery = ""; showSearchBar = false }) {
+                    Icon(Icons.Default.Close, contentDescription = null, tint = tokens.textSecondary)
                 }
             }
         }
 
-        // 底部液态玻璃悬浮 Mini 音乐条 + 悬浮胶囊导航栏
+        // 底部悬浮 Mini 音乐条 + iOS 26 分离式液态玻璃底栏（视频/音乐/私密/设置 + 独立搜索圆钮）
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -290,60 +298,80 @@ fun ArashiPlayerApp() {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .liquidGlass(RoundedCornerShape(24.dp), alphaTop = 0.22f, alphaBottom = 0.10f)
+                        .arashiSurface(RoundedCornerShape(22.dp))
                         .clickable { showFullMusicSheet = true }
-                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     AsyncImage(
                         model = saved?.coverUrl ?: track.albumArtUri,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(42.dp).clip(RoundedCornerShape(12.dp))
+                        modifier = Modifier.size(38.dp).clip(RoundedCornerShape(10.dp))
                     )
-                    Spacer(Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(saved?.title?.ifBlank { track.title } ?: track.title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                        Text(saved?.artist?.ifBlank { track.artist } ?: track.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1)
-                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "${saved?.title?.ifBlank { track.title } ?: track.title} · ${saved?.artist?.ifBlank { track.artist } ?: track.artist}",
+                        color = tokens.textPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f)
+                    )
                     IconButton(onClick = { if (musicPlayer.isPlaying) musicPlayer.pause() else musicPlayer.play() }) {
                         Icon(
                             if (isMusicPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = null,
-                            tint = Color.White
+                            tint = tokens.textPrimary
                         )
                     }
                 }
             }
 
-            // 液态玻璃悬浮胶囊底栏
-            val navItems = listOf(
-                Triple(0, "视频", Icons.Default.PlayCircle),
-                Triple(1, "音乐", Icons.Default.MusicNote),
-                Triple(2, "私密", Icons.Default.Lock),
-                Triple(3, "我的", Icons.Default.Person)
-            )
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .liquidGlass(RoundedCornerShape(30.dp), alphaTop = 0.22f, alphaBottom = 0.09f)
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                navItems.forEach { (idx, label, icon) ->
-                    val selected = currentTab == idx
-                    Column(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(22.dp))
-                            .then(if (selected) Modifier.liquidGlass(RoundedCornerShape(22.dp), alphaTop = 0.24f, alphaBottom = 0.10f, elevation = 0.dp) else Modifier)
-                            .clickable { currentTab = idx }
-                            .padding(horizontal = 18.dp, vertical = 7.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(icon, contentDescription = null, tint = if (selected) GlassCyan else TextSecondary, modifier = Modifier.size(22.dp))
-                        Text(label, color = if (selected) GlassCyan else TextSecondary, fontSize = 11.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+                val navItems = listOf(
+                    Triple(0, "视频", Icons.Default.PlayCircle),
+                    Triple(1, "音乐", Icons.Default.MusicNote),
+                    Triple(2, "私密", Icons.Default.Lock),
+                    Triple(3, "设置", Icons.Default.Settings)
+                )
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .arashiSurface(RoundedCornerShape(32.dp))
+                        .padding(horizontal = 6.dp, vertical = 5.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    navItems.forEach { (idx, label, icon) ->
+                        val selected = currentTab == idx
+                        Column(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(24.dp))
+                                .then(
+                                    if (selected) Modifier.background(tokens.accent.copy(alpha = 0.16f))
+                                    else Modifier
+                                )
+                                .clickable { currentTab = idx }
+                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(icon, contentDescription = null, tint = if (selected) tokens.accent else tokens.textSecondary, modifier = Modifier.size(21.dp))
+                            Text(label, color = if (selected) tokens.accent else tokens.textSecondary, fontSize = 11.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+                        }
                     }
+                }
+
+                // 独立悬浮搜索圆钮
+                IconButton(
+                    onClick = { showSearchBar = !showSearchBar },
+                    modifier = Modifier.size(56.dp).arashiSurface(CircleShape)
+                ) {
+                    Icon(Icons.Default.Search, contentDescription = null, tint = tokens.textPrimary)
                 }
             }
         }

@@ -52,8 +52,7 @@ import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import com.arashiplayer.data.SubtitleStyleConfig
 import com.arashiplayer.data.formatDuration
-import com.arashiplayer.ui.theme.GlassCyan
-import com.arashiplayer.ui.theme.liquidGlass
+import com.arashiplayer.ui.theme.LocalArashiTokens
 import kotlinx.coroutines.delay
 
 @OptIn(UnstableApi::class)
@@ -65,6 +64,7 @@ fun VideoPlayerScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
+    val tokens = LocalArashiTokens.current
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
     var subtitleUri by remember { mutableStateOf<Uri?>(null) }
@@ -118,8 +118,7 @@ fun VideoPlayerScreen(
     }
 
     LaunchedEffect(playbackSpeed, isLongPressBoost) {
-        val actual = if (isLongPressBoost) 2.5f else playbackSpeed
-        exoPlayer.playbackParameters = PlaybackParameters(actual)
+        exoPlayer.playbackParameters = PlaybackParameters(if (isLongPressBoost) 2.5f else playbackSpeed)
     }
 
     LaunchedEffect(isLooping) {
@@ -177,16 +176,14 @@ fun VideoPlayerScreen(
                                     exoPlayer.seekTo((exoPlayer.currentPosition + 10_000L).coerceAtMost(duration))
                                     hudText = "+10s"
                                 }
-                                else -> {
-                                    if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-                                }
+                                else -> if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
                             }
                         }
                     },
                     onLongPress = {
                         if (!isLocked) {
                             isLongPressBoost = true
-                            hudText = "2.5x 快进中"
+                            hudText = "2.5x"
                         }
                     },
                     onPress = {
@@ -201,8 +198,7 @@ fun VideoPlayerScreen(
             .pointerInput(isLocked) {
                 if (!isLocked) {
                     detectHorizontalDragGestures { _, dragAmount ->
-                        val deltaMs = (dragAmount * 120).toLong()
-                        val target = (exoPlayer.currentPosition + deltaMs).coerceIn(0L, duration.coerceAtLeast(1L))
+                        val target = (exoPlayer.currentPosition + (dragAmount * 120).toLong()).coerceIn(0L, duration.coerceAtLeast(1L))
                         exoPlayer.seekTo(target)
                         hudText = formatDuration(target)
                     }
@@ -211,8 +207,7 @@ fun VideoPlayerScreen(
             .pointerInput(isLocked) {
                 if (!isLocked) {
                     detectVerticalDragGestures { change, dragAmount ->
-                        val isLeft = change.position.x < size.width / 2f
-                        if (isLeft) {
+                        if (change.position.x < size.width / 2f) {
                             activity?.window?.let { win ->
                                 val lp = win.attributes
                                 val cur = if (lp.screenBrightness < 0f) 0.5f else lp.screenBrightness
@@ -272,19 +267,18 @@ fun VideoPlayerScreen(
             }
         )
 
-        // 中央液态玻璃手势 HUD
         hudText?.let { text ->
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .liquidGlass(RoundedCornerShape(18.dp))
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Color(0xBB151822))
                     .padding(horizontal = 20.dp, vertical = 10.dp)
             ) {
                 Text(text, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             }
         }
 
-        // 顶部液态玻璃控制栏
         AnimatedVisibility(
             visible = showControls && !isLocked,
             enter = fadeIn(),
@@ -302,33 +296,17 @@ fun VideoPlayerScreen(
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.White)
                 }
-                Text(
-                    text = videoTitle,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    modifier = Modifier.weight(1f)
-                )
+                Text(videoTitle, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
                 IconButton(onClick = { isLooping = !isLooping }) {
-                    Icon(
-                        Icons.Default.RepeatOne,
-                        contentDescription = null,
-                        tint = if (isLooping) GlassCyan else Color.White
-                    )
+                    Icon(Icons.Default.RepeatOne, contentDescription = null, tint = if (isLooping) tokens.accent else Color.White)
                 }
                 IconButton(onClick = { showTimerSheet = true }) {
-                    Icon(
-                        Icons.Default.Timer,
-                        contentDescription = null,
-                        tint = if (sleepRemainingSec > 0) GlassCyan else Color.White
-                    )
+                    Icon(Icons.Default.Timer, contentDescription = null, tint = if (sleepRemainingSec > 0) tokens.accent else Color.White)
                 }
                 IconButton(onClick = {
                     runCatching {
                         activity?.enterPictureInPictureMode(
-                            PictureInPictureParams.Builder()
-                                .setAspectRatio(Rational(16, 9))
-                                .build()
+                            PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
                         )
                     }
                 }) {
@@ -338,12 +316,11 @@ fun VideoPlayerScreen(
                     Icon(Icons.Default.Subtitles, contentDescription = null, tint = Color.White)
                 }
                 IconButton(onClick = { showSubtitleSheet = true }) {
-                    Icon(Icons.Default.Tune, contentDescription = null, tint = GlassCyan)
+                    Icon(Icons.Default.Tune, contentDescription = null, tint = tokens.accent)
                 }
             }
         }
 
-        // 左侧防误触锁
         AnimatedVisibility(
             visible = showControls,
             enter = fadeIn(),
@@ -352,17 +329,12 @@ fun VideoPlayerScreen(
         ) {
             IconButton(
                 onClick = { isLocked = !isLocked },
-                modifier = Modifier.liquidGlass(CircleShape)
+                modifier = Modifier.clip(CircleShape).background(Color(0x88151822))
             ) {
-                Icon(
-                    imageVector = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
-                    contentDescription = null,
-                    tint = Color.White
-                )
+                Icon(if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen, contentDescription = null, tint = Color.White)
             }
         }
 
-        // 底部液态玻璃进度条与专业控制栏
         AnimatedVisibility(
             visible = showControls && !isLocked,
             enter = fadeIn(),
@@ -380,18 +352,12 @@ fun VideoPlayerScreen(
                     Text(formatDuration(currentPos), color = Color.White, fontSize = 12.sp)
                     Slider(
                         value = if (duration > 0L) (currentPos.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f,
-                        onValueChange = { frac ->
-                            exoPlayer.seekTo((frac * duration).toLong())
-                        },
-                        colors = SliderDefaults.colors(
-                            thumbColor = GlassCyan,
-                            activeTrackColor = GlassCyan
-                        ),
+                        onValueChange = { exoPlayer.seekTo((it * duration).toLong()) },
+                        colors = SliderDefaults.colors(thumbColor = tokens.accent, activeTrackColor = tokens.accent),
                         modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                     )
                     Text(formatDuration(duration), color = Color.LightGray, fontSize = 12.sp)
                 }
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -402,21 +368,15 @@ fun VideoPlayerScreen(
                             Icon(Icons.Default.Replay10, contentDescription = null, tint = Color.White)
                         }
                         IconButton(onClick = { if (isPlaying) exoPlayer.pause() else exoPlayer.play() }) {
-                            Icon(
-                                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(32.dp)
-                            )
+                            Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
                         }
                         IconButton(onClick = { exoPlayer.seekTo((currentPos + 10_000L).coerceAtMost(duration)) }) {
                             Icon(Icons.Default.Forward10, contentDescription = null, tint = Color.White)
                         }
                     }
-
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(onClick = { showSpeedSheet = true }) {
-                            Text("${playbackSpeed}x", color = GlassCyan, fontWeight = FontWeight.Bold)
+                            Text("${playbackSpeed}x", color = tokens.accent, fontWeight = FontWeight.Bold)
                         }
                         TextButton(onClick = {
                             resizeMode = when (resizeMode) {
@@ -447,7 +407,6 @@ fun VideoPlayerScreen(
             }
         }
 
-        // 倍速选择弹窗
         if (showSpeedSheet) {
             val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 2.5f, 3.0f)
             Box(
@@ -458,21 +417,19 @@ fun VideoPlayerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
-                        .liquidGlass(RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color(0xE6181C26))
                         .padding(14.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     speeds.forEach { spd ->
                         Text(
                             text = "${spd}x",
-                            color = if (spd == playbackSpeed) GlassCyan else Color.White,
+                            color = if (spd == playbackSpeed) tokens.accent else Color.White,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
-                                .clickable {
-                                    playbackSpeed = spd
-                                    showSpeedSheet = false
-                                }
+                                .clickable { playbackSpeed = spd; showSpeedSheet = false }
                                 .padding(horizontal = 8.dp, vertical = 6.dp)
                         )
                     }
@@ -480,7 +437,6 @@ fun VideoPlayerScreen(
             }
         }
 
-        // 定时关闭弹窗
         if (showTimerSheet) {
             val mins = listOf(0, 15, 30, 60)
             Box(
@@ -491,7 +447,8 @@ fun VideoPlayerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
-                        .liquidGlass(RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color(0xE6181C26))
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
@@ -514,7 +471,6 @@ fun VideoPlayerScreen(
             }
         }
 
-        // 外挂字幕样式设置面板
         if (showSubtitleSheet) {
             SubtitleStyleDialog(
                 config = subtitleStyle,
@@ -532,26 +488,19 @@ private fun SubtitleStyleDialog(
     onDismiss: () -> Unit
 ) {
     val presetColors = listOf(
-        Color.White,
-        Color(0xFFFFE066),
-        Color(0xFF64E8FF),
-        Color(0xFF7BF1A8),
-        Color(0xFFFF99C8),
-        Color(0xFFFFB703)
+        Color.White, Color(0xFFFFE066), Color(0xFF64E8FF),
+        Color(0xFF7BF1A8), Color(0xFFFF99C8), Color(0xFFFFB703)
     )
-
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0x80000000))
-            .clickable { onDismiss() },
+        modifier = Modifier.fillMaxSize().background(Color(0x80000000)).clickable { onDismiss() },
         contentAlignment = Alignment.BottomCenter
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp)
-                .liquidGlass(RoundedCornerShape(28.dp), alphaTop = 0.22f, alphaBottom = 0.10f)
+                .clip(RoundedCornerShape(28.dp))
+                .background(Color(0xF0181C26))
                 .clickable(enabled = false) {}
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)

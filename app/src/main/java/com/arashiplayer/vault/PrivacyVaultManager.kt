@@ -24,7 +24,7 @@ data class VaultItem(
 
 class PrivacyVaultManager(private val context: Context) {
 
-    private val prefs = context.getSharedPreferences("arashi_vault_v2", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences("arashi_vault_v3", Context.MODE_PRIVATE)
     private val indexKey = "vault_items_json"
     private val lockTypeKey = "vault_lock_type"
     private val pinHashKey = "vault_pin_hash"
@@ -63,9 +63,8 @@ class PrivacyVaultManager(private val context: Context) {
     }
 
     fun setPattern(nodes: List<Int>) {
-        val encoded = nodes.joinToString("-")
         prefs.edit()
-            .putString(patternHashKey, sha256(encoded))
+            .putString(patternHashKey, sha256(nodes.joinToString("-")))
             .putString(lockTypeKey, VaultLockType.PATTERN.name)
             .apply()
     }
@@ -105,13 +104,10 @@ class PrivacyVaultManager(private val context: Context) {
         return items
     }
 
-    /**
-     * 原地重命名改后缀加密（零额外空间占用）
-     */
     fun encryptInPlace(sourcePath: String, mediaType: VaultMediaType): Result<VaultItem> {
         val sourceFile = File(sourcePath)
-        if (!sourceFile.exists()) return Result.failure(IllegalArgumentException("文件不存在"))
-        val parentDir = sourceFile.parentFile ?: return Result.failure(IllegalStateException("目录无效"))
+        if (!sourceFile.exists()) return Result.failure(IllegalArgumentException("FILE_NOT_FOUND"))
+        val parentDir = sourceFile.parentFile ?: return Result.failure(IllegalStateException("NO_PARENT"))
 
         val nomedia = File(parentDir, ".nomedia")
         if (!nomedia.exists()) runCatching { nomedia.createNewFile() }
@@ -138,7 +134,7 @@ class PrivacyVaultManager(private val context: Context) {
 
     fun decryptInPlace(item: VaultItem): Result<File> {
         val encFile = File(item.encryptedPath)
-        if (!encFile.exists()) return Result.failure(IllegalArgumentException("文件不存在"))
+        if (!encFile.exists()) return Result.failure(IllegalArgumentException("FILE_NOT_FOUND"))
         val targetFile = File(item.originalPath)
         if (!encFile.renameTo(targetFile)) {
             return Result.failure(SecurityException("PERMISSION_REQUIRED"))
@@ -175,7 +171,7 @@ class PrivacyVaultManager(private val context: Context) {
     }
 
     private fun sha256(input: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest("arashi_v2_$input".toByteArray())
+        val digest = MessageDigest.getInstance("SHA-256").digest("arashi_v3_$input".toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
     }
 }

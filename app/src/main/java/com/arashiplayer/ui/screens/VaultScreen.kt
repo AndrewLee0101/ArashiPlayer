@@ -52,6 +52,7 @@ fun VaultScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? FragmentActivity
+    val tokens = LocalArashiTokens.current
 
     var lockType by remember { mutableStateOf(vaultManager.getLockType()) }
     var unlocked by remember { mutableStateOf(lockType == VaultLockType.NONE) }
@@ -59,12 +60,11 @@ fun VaultScreen(
     var authError by remember { mutableStateOf<String?>(null) }
 
     var items by remember { mutableStateOf(vaultManager.listVaultItems()) }
-    var filterTab by remember { mutableIntStateOf(0) } // 0=全部 1=视频 2=音频 3=图片
+    var filterTab by remember { mutableIntStateOf(0) }
     var showSecuritySheet by remember { mutableStateOf(false) }
     var showImportSheet by remember { mutableStateOf(false) }
     var viewingImage by remember { mutableStateOf<VaultItem?>(null) }
 
-    // 自动拉起指纹解锁
     LaunchedEffect(unlocked) {
         if (!unlocked && vaultManager.isBiometricEnabled() && activity != null) {
             triggerBiometric(activity) {
@@ -84,13 +84,13 @@ fun VaultScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
-                modifier = Modifier.size(68.dp).liquidGlass(CircleShape),
+                modifier = Modifier.size(68.dp).arashiSurface(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Lock, contentDescription = null, tint = GlassCyan, modifier = Modifier.size(32.dp))
+                Icon(Icons.Default.Lock, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(32.dp))
             }
             Spacer(Modifier.height(16.dp))
-            Text("私密空间", color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text("私密空间", color = tokens.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(22.dp))
 
             if (lockType == VaultLockType.PATTERN) {
@@ -106,14 +106,13 @@ fun VaultScreen(
                     }
                 )
             } else {
-                // 液态玻璃数字密码键盘
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     repeat(4) { i ->
                         Box(
                             modifier = Modifier
                                 .size(14.dp)
                                 .clip(CircleShape)
-                                .background(if (i < pinInput.length) GlassCyan else Color.White.copy(alpha = 0.22f))
+                                .background(if (i < pinInput.length) tokens.accent else tokens.textPrimary.copy(alpha = 0.22f))
                         )
                     }
                 }
@@ -141,7 +140,7 @@ fun VaultScreen(
 
             authError?.let {
                 Spacer(Modifier.height(12.dp))
-                Text(it, color = GlassRose, fontSize = 13.sp)
+                Text(it, color = Color(0xFFFF2442), fontSize = 13.sp)
             }
 
             if (vaultManager.isBiometricEnabled() && activity != null) {
@@ -153,9 +152,9 @@ fun VaultScreen(
                             items = vaultManager.listVaultItems()
                         }
                     },
-                    modifier = Modifier.size(54.dp).liquidGlass(CircleShape)
+                    modifier = Modifier.size(54.dp).arashiSurface(CircleShape)
                 ) {
-                    Icon(Icons.Default.Fingerprint, contentDescription = null, tint = GlassCyan, modifier = Modifier.size(30.dp))
+                    Icon(Icons.Default.Fingerprint, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(30.dp))
                 }
             }
         }
@@ -177,44 +176,40 @@ fun VaultScreen(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("私密空间", color = TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("私密空间", color = tokens.textPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 IconButton(
                     onClick = {
-                        if (!vaultManager.hasAllFilesAccess()) {
-                            openAllFilesPermission(context)
-                        } else {
-                            showImportSheet = true
-                        }
+                        if (!vaultManager.hasAllFilesAccess()) openAllFilesPermission(context)
+                        else showImportSheet = true
                     },
-                    modifier = Modifier.liquidGlass(CircleShape)
+                    modifier = Modifier.arashiSurface(CircleShape)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, tint = GlassCyan)
+                    Icon(Icons.Default.Add, contentDescription = null, tint = tokens.accent)
                 }
                 Spacer(Modifier.width(10.dp))
                 IconButton(
                     onClick = { showSecuritySheet = true },
-                    modifier = Modifier.liquidGlass(CircleShape)
+                    modifier = Modifier.arashiSurface(CircleShape)
                 ) {
-                    Icon(Icons.Default.Security, contentDescription = null, tint = Color.White)
+                    Icon(Icons.Default.Security, contentDescription = null, tint = tokens.textPrimary)
                 }
             }
 
-            // 分类胶囊
             val tabs = listOf("全部", "视频", "音频", "图片")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 tabs.forEachIndexed { idx, label ->
                     val selected = idx == filterTab
                     Box(
                         modifier = Modifier
-                            .liquidGlass(
-                                shape = RoundedCornerShape(16.dp),
-                                alphaTop = if (selected) 0.30f else 0.12f,
-                                alphaBottom = if (selected) 0.15f else 0.05f
+                            .clip(RoundedCornerShape(18.dp))
+                            .then(
+                                if (selected) Modifier.background(tokens.accent)
+                                else Modifier.arashiSurface(RoundedCornerShape(18.dp), elevation = 2.dp)
                             )
                             .clickable { filterTab = idx }
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        Text(label, color = if (selected) GlassCyan else TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(label, color = if (selected) Color.White else tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -223,18 +218,18 @@ fun VaultScreen(
 
             if (filtered.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("空", color = TextSecondary)
+                    Text("空", color = tokens.textSecondary)
                 }
             } else {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 140.dp)
+                    contentPadding = PaddingValues(bottom = 160.dp)
                 ) {
                     items(filtered, key = { it.id }) { item ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .liquidGlass(RoundedCornerShape(20.dp))
+                                .arashiSurface(RoundedCornerShape(22.dp))
                                 .clickable {
                                     when (item.mediaType) {
                                         VaultMediaType.VIDEO -> onPlayVaultVideo(item)
@@ -254,20 +249,20 @@ fun VaultScreen(
                                 )
                             } else {
                                 Box(
-                                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.08f)),
+                                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(tokens.accent.copy(alpha = 0.14f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         if (item.mediaType == VaultMediaType.VIDEO) Icons.Default.Movie else Icons.Default.MusicNote,
                                         contentDescription = null,
-                                        tint = GlassCyan
+                                        tint = tokens.accent
                                     )
                                 }
                             }
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(item.originalName, color = TextPrimary, fontWeight = FontWeight.Medium, maxLines = 1)
-                                Text(formatFileSize(item.sizeBytes), color = TextSecondary, fontSize = 12.sp)
+                                Text(item.originalName, color = tokens.textPrimary, fontWeight = FontWeight.Medium, maxLines = 1)
+                                Text(formatFileSize(item.sizeBytes), color = tokens.textSecondary, fontSize = 12.sp)
                             }
                             IconButton(onClick = {
                                 if (!vaultManager.hasAllFilesAccess()) {
@@ -278,7 +273,7 @@ fun VaultScreen(
                                     onRefreshMedia()
                                 }
                             }) {
-                                Icon(Icons.Default.LockOpen, contentDescription = null, tint = GlassViolet)
+                                Icon(Icons.Default.LockOpen, contentDescription = null, tint = tokens.accent)
                             }
                         }
                     }
@@ -286,7 +281,6 @@ fun VaultScreen(
             }
         }
 
-        // 私密图片全屏查看
         viewingImage?.let { img ->
             Box(
                 modifier = Modifier.fillMaxSize().background(Color.Black).clickable { viewingImage = null },
@@ -301,7 +295,6 @@ fun VaultScreen(
             }
         }
 
-        // 添加图片/视频/音频到私密空间弹窗
         if (showImportSheet) {
             VaultImportSheet(
                 videos = allVideos,
@@ -309,9 +302,8 @@ fun VaultScreen(
                 images = allImages,
                 onEncrypt = { path, type ->
                     val res = vaultManager.encryptInPlace(path, type)
-                    if (res.isFailure) {
-                        openAllFilesPermission(context)
-                    } else {
+                    if (res.isFailure) openAllFilesPermission(context)
+                    else {
                         items = vaultManager.listVaultItems()
                         onRefreshMedia()
                     }
@@ -320,7 +312,6 @@ fun VaultScreen(
             )
         }
 
-        // 安全锁设置（密码 / 手势 / 指纹）
         if (showSecuritySheet) {
             VaultSecurityDialog(
                 vaultManager = vaultManager,
@@ -339,9 +330,10 @@ private fun VaultImportSheet(
     onEncrypt: (String, VaultMediaType) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val tokens = LocalArashiTokens.current
     var tab by remember { mutableIntStateOf(0) }
     Box(
-        modifier = Modifier.fillMaxSize().background(Color(0x99000000)).clickable { onDismiss() },
+        modifier = Modifier.fillMaxSize().background(Color(0x88000000)).clickable { onDismiss() },
         contentAlignment = Alignment.BottomCenter
     ) {
         Column(
@@ -349,20 +341,21 @@ private fun VaultImportSheet(
                 .fillMaxWidth()
                 .height(480.dp)
                 .padding(12.dp)
-                .liquidGlass(RoundedCornerShape(28.dp), alphaTop = 0.24f, alphaBottom = 0.12f)
+                .arashiSurface(RoundedCornerShape(28.dp))
                 .clickable(enabled = false) {}
                 .padding(18.dp)
         ) {
-            Text("移入私密空间", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("添加到加密空间", color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 listOf("视频", "图片", "音频").forEachIndexed { idx, label ->
                     Text(
                         text = label,
-                        color = if (tab == idx) GlassCyan else TextSecondary,
+                        color = if (tab == idx) Color.White else tokens.textPrimary,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
-                            .liquidGlass(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (tab == idx) tokens.accent else tokens.textPrimary.copy(alpha = 0.08f))
                             .clickable { tab = idx }
                             .padding(horizontal = 14.dp, vertical = 6.dp)
                     )
@@ -375,17 +368,14 @@ private fun VaultImportSheet(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .liquidGlass(RoundedCornerShape(14.dp))
-                                .clickable {
-                                    onEncrypt(v.path, VaultMediaType.VIDEO)
-                                    onDismiss()
-                                }
+                                .arashiSurface(RoundedCornerShape(14.dp), elevation = 2.dp)
+                                .clickable { onEncrypt(v.path, VaultMediaType.VIDEO); onDismiss() }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Movie, contentDescription = null, tint = GlassCyan)
+                            Icon(Icons.Default.Movie, contentDescription = null, tint = tokens.accent)
                             Spacer(Modifier.width(10.dp))
-                            Text(v.title, color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
+                            Text(v.title, color = tokens.textPrimary, maxLines = 1, modifier = Modifier.weight(1f))
                         }
                     }
                 }
@@ -402,10 +392,7 @@ private fun VaultImportSheet(
                             modifier = Modifier
                                 .aspectRatio(1f)
                                 .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    onEncrypt(img.path, VaultMediaType.IMAGE)
-                                    onDismiss()
-                                }
+                                .clickable { onEncrypt(img.path, VaultMediaType.IMAGE); onDismiss() }
                         )
                     }
                 }
@@ -414,17 +401,14 @@ private fun VaultImportSheet(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .liquidGlass(RoundedCornerShape(14.dp))
-                                .clickable {
-                                    onEncrypt(a.path, VaultMediaType.AUDIO)
-                                    onDismiss()
-                                }
+                                .arashiSurface(RoundedCornerShape(14.dp), elevation = 2.dp)
+                                .clickable { onEncrypt(a.path, VaultMediaType.AUDIO); onDismiss() }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = GlassViolet)
+                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = tokens.accent)
                             Spacer(Modifier.width(10.dp))
-                            Text(a.title, color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
+                            Text(a.title, color = tokens.textPrimary, maxLines = 1, modifier = Modifier.weight(1f))
                         }
                     }
                 }
@@ -439,26 +423,27 @@ private fun VaultSecurityDialog(
     onUpdated: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    var mode by remember { mutableStateOf("menu") } // menu, pin, pattern
+    val tokens = LocalArashiTokens.current
+    var mode by remember { mutableStateOf("menu") }
     var newPin by remember { mutableStateOf("") }
     var bioEnabled by remember { mutableStateOf(vaultManager.isBiometricEnabled()) }
 
     Box(
-        modifier = Modifier.fillMaxSize().background(Color(0x99000000)).clickable { onDismiss() },
+        modifier = Modifier.fillMaxSize().background(Color(0x88000000)).clickable { onDismiss() },
         contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(24.dp)
-                .liquidGlass(RoundedCornerShape(28.dp), alphaTop = 0.25f, alphaBottom = 0.12f)
+                .arashiSurface(RoundedCornerShape(28.dp))
                 .clickable(enabled = false) {}
                 .padding(22.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             when (mode) {
                 "pin" -> {
-                    Text("设置 4 位数字密码", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("设置 4 位密码", color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         repeat(4) { i ->
@@ -466,7 +451,7 @@ private fun VaultSecurityDialog(
                                 modifier = Modifier
                                     .size(14.dp)
                                     .clip(CircleShape)
-                                    .background(if (i < newPin.length) GlassCyan else Color.White.copy(alpha = 0.22f))
+                                    .background(if (i < newPin.length) tokens.accent else tokens.textPrimary.copy(alpha = 0.22f))
                             )
                         }
                     }
@@ -486,7 +471,7 @@ private fun VaultSecurityDialog(
                     )
                 }
                 "pattern" -> {
-                    Text("绘制手势密码（至少4点）", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("设置手势解锁", color = tokens.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(16.dp))
                     PatternLockGrid(
                         onPatternComplete = { nodes ->
@@ -497,22 +482,22 @@ private fun VaultSecurityDialog(
                     )
                 }
                 else -> {
-                    Text("解锁方式", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Text("解锁方式", color = tokens.textPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(16.dp))
-                    SecurityRow(Icons.Default.Pin, "设置数字密码") { mode = "pin" }
+                    SecurityRow(Icons.Default.Pin, "数字密码") { mode = "pin" }
                     Spacer(Modifier.height(10.dp))
-                    SecurityRow(Icons.Default.Pattern, "设置手势解锁") { mode = "pattern" }
+                    SecurityRow(Icons.Default.Pattern, "手势解锁") { mode = "pattern" }
                     Spacer(Modifier.height(10.dp))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .liquidGlass(RoundedCornerShape(16.dp))
+                            .arashiSurface(RoundedCornerShape(16.dp), elevation = 2.dp)
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Fingerprint, contentDescription = null, tint = GlassCyan)
+                        Icon(Icons.Default.Fingerprint, contentDescription = null, tint = tokens.accent)
                         Spacer(Modifier.width(12.dp))
-                        Text("指纹解锁", color = Color.White, modifier = Modifier.weight(1f))
+                        Text("指纹解锁", color = tokens.textPrimary, modifier = Modifier.weight(1f))
                         Switch(
                             checked = bioEnabled,
                             onCheckedChange = {
@@ -536,22 +521,24 @@ private fun VaultSecurityDialog(
 
 @Composable
 private fun SecurityRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, onClick: () -> Unit) {
+    val tokens = LocalArashiTokens.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .liquidGlass(RoundedCornerShape(16.dp))
+            .arashiSurface(RoundedCornerShape(16.dp), elevation = 2.dp)
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = GlassCyan)
+        Icon(icon, contentDescription = null, tint = tokens.accent)
         Spacer(Modifier.width(12.dp))
-        Text(title, color = Color.White, fontWeight = FontWeight.Medium)
+        Text(title, color = tokens.textPrimary, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
 private fun PinKeypad(onDigit: (String) -> Unit, onBackspace: () -> Unit) {
+    val tokens = LocalArashiTokens.current
     val rows = listOf(
         listOf("1", "2", "3"),
         listOf("4", "5", "6"),
@@ -568,11 +555,11 @@ private fun PinKeypad(onDigit: (String) -> Unit, onBackspace: () -> Unit) {
                         Box(
                             modifier = Modifier
                                 .size(64.dp)
-                                .liquidGlass(CircleShape)
+                                .arashiSurface(CircleShape, elevation = 3.dp)
                                 .clickable { if (key == "⌫") onBackspace() else onDigit(key) },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(key, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                            Text(key, color = tokens.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }

@@ -7,9 +7,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,7 +28,6 @@ import coil.compose.AsyncImage
 import com.arashiplayer.data.LocalAudio
 import com.arashiplayer.data.LocalVideo
 import com.arashiplayer.data.formatDuration
-import com.arashiplayer.data.formatFileSize
 import com.arashiplayer.music.OnlineTagMatcher
 import com.arashiplayer.ui.theme.*
 
@@ -39,56 +35,91 @@ import com.arashiplayer.ui.theme.*
 @Composable
 fun VideoLibraryScreen(
     videos: List<LocalVideo>,
+    searchQuery: String,
     onVideoClick: (LocalVideo) -> Unit,
     onEncryptVideo: (LocalVideo) -> Unit,
     onOpenVault: () -> Unit
 ) {
+    val tokens = LocalArashiTokens.current
+    var filterIdx by remember { mutableIntStateOf(0) } // 0=全部 1=4K 2=文件夹 3=最近
     var selectedForAction by remember { mutableStateOf<LocalVideo?>(null) }
+
+    val filteredVideos = remember(videos, filterIdx, searchQuery) {
+        val base = if (searchQuery.isBlank()) videos else videos.filter { it.title.contains(searchQuery, ignoreCase = true) }
+        when (filterIdx) {
+            1 -> base.filter { it.height >= 2160 || it.width >= 3840 }
+            2 -> base.sortedBy { it.folderName }
+            3 -> base.take(12)
+            else -> base
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 160.dp)
+            contentPadding = PaddingValues(bottom = 175.dp)
         ) {
             item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "岚播放器",
-                        color = TextPrimary,
+                        color = tokens.textPrimary,
                         fontSize = 30.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
                     )
-                    IconButton(
-                        onClick = onOpenVault,
-                        modifier = Modifier.liquidGlass(CircleShape)
-                    ) {
-                        Icon(Icons.Default.Shield, contentDescription = null, tint = GlassCyan)
+                    IconButton(onClick = onOpenVault, modifier = Modifier.arashiSurface(CircleShape)) {
+                        Icon(Icons.Default.Shield, contentDescription = null, tint = tokens.textPrimary)
                     }
                 }
             }
 
-            if (videos.isNotEmpty()) {
-                val hero = videos.first()
+            // 筛选胶囊
+            item {
+                val pills = listOf("全部", "4K", "文件夹", "最近")
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    pills.forEachIndexed { idx, label ->
+                        val active = idx == filterIdx
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(18.dp))
+                                .then(
+                                    if (active) Modifier.background(tokens.textPrimary)
+                                    else Modifier.arashiSurface(RoundedCornerShape(18.dp), elevation = 2.dp)
+                                )
+                                .clickable { filterIdx = idx }
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (active) tokens.background else tokens.textPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+
+            // Bento Hero 大卡片
+            if (filteredVideos.isNotEmpty()) {
+                val hero = filteredVideos.first()
                 item {
-                    Text(
-                        text = "继续播放",
-                        color = TextPrimary,
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                    )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp)
-                            .height(200.dp)
-                            .liquidGlass(RoundedCornerShape(26.dp))
+                            .height(210.dp)
+                            .arashiSurface(RoundedCornerShape(28.dp))
                             .combinedClickable(
                                 onClick = { onVideoClick(hero) },
                                 onLongClick = { selectedForAction = hero }
@@ -103,126 +134,118 @@ fun VideoLibraryScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC060812))))
+                                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xAA000000))))
                         )
                         Box(
                             modifier = Modifier
                                 .size(58.dp)
                                 .align(Alignment.Center)
-                                .liquidGlass(CircleShape, alphaTop = 0.32f, alphaBottom = 0.14f),
+                                .clip(CircleShape)
+                                .background(Color(0x99FFFFFF)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(34.dp))
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color(0xFF151822), modifier = Modifier.size(34.dp))
                         }
-                        Column(
+                        Box(
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
-                                .padding(16.dp)
+                                .padding(14.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0x88000000))
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
-                            Text(hero.title, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                            Text("${hero.resolutionBadge} · ${formatDuration(hero.durationMs)}", color = TextSecondary, fontSize = 12.sp)
+                            Text("${hero.title} · ${hero.resolutionBadge}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                         }
                     }
+                    Spacer(Modifier.height(16.dp))
                 }
             }
 
-            item {
-                Spacer(Modifier.height(22.dp))
-                Text(
-                    text = "本地视频",
-                    color = TextPrimary,
-                    fontSize = 19.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                )
-            }
-
-            items(videos, key = { it.id }) { video ->
+            // Bento 双列卡片网格
+            val rest = if (filteredVideos.size > 1) filteredVideos.drop(1) else emptyList()
+            val rows = rest.chunked(2)
+            items(rows) { pair ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 6.dp)
-                        .liquidGlass(RoundedCornerShape(22.dp))
-                        .combinedClickable(
-                            onClick = { onVideoClick(video) },
-                            onLongClick = { selectedForAction = video }
-                        )
-                        .padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 20.dp, vertical = 7.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .width(126.dp)
-                            .height(76.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF141828))
-                    ) {
-                        AsyncImage(
-                            model = video.uri,
-                            contentDescription = video.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        Text(
-                            text = video.resolutionBadge,
-                            color = Color.Black,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
+                    pair.forEach { video ->
+                        Column(
                             modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(6.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color.White.copy(alpha = 0.88f))
-                                .padding(horizontal = 5.dp, vertical = 1.dp)
-                        )
+                                .weight(1f)
+                                .arashiSurface(RoundedCornerShape(24.dp))
+                                .combinedClickable(
+                                    onClick = { onVideoClick(video) },
+                                    onLongClick = { selectedForAction = video }
+                                )
+                                .padding(8.dp)
+                        ) {
+                            AsyncImage(
+                                model = video.uri,
+                                contentDescription = video.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(1.05f)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(Color(0xFF1A202E))
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = video.title,
+                                    color = tokens.textPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = formatDuration(video.durationMs),
+                                    color = tokens.textSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
                     }
-                    Spacer(Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(video.title, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 2)
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "${formatDuration(video.durationMs)} · ${formatFileSize(video.sizeBytes)}",
-                            color = TextSecondary,
-                            fontSize = 12.sp
-                        )
-                    }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
         }
 
-        // 长按视频操作菜单（移入加密空间）
+        // 长按视频操作弹窗
         selectedForAction?.let { video ->
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0x88000000))
-                    .clickable { selectedForAction = null },
+                modifier = Modifier.fillMaxSize().background(Color(0x88000000)).clickable { selectedForAction = null },
                 contentAlignment = Alignment.BottomCenter
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
-                        .liquidGlass(RoundedCornerShape(28.dp), alphaTop = 0.25f, alphaBottom = 0.12f)
+                        .arashiSurface(RoundedCornerShape(28.dp))
                         .clickable(enabled = false) {}
                         .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(video.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(video.title, color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .liquidGlass(RoundedCornerShape(18.dp))
-                            .clickable {
-                                onEncryptVideo(video)
-                                selectedForAction = null
-                            }
+                            .arashiSurface(RoundedCornerShape(18.dp), elevation = 2.dp)
+                            .clickable { onEncryptVideo(video); selectedForAction = null }
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Lock, contentDescription = null, tint = GlassCyan)
+                        Icon(Icons.Default.Lock, contentDescription = null, tint = tokens.accent)
                         Spacer(Modifier.width(12.dp))
-                        Text("添加到加密空间", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text("添加到加密空间", color = tokens.textPrimary, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -234,36 +257,43 @@ fun VideoLibraryScreen(
 @Composable
 fun MusicLibraryScreen(
     audios: List<LocalAudio>,
+    searchQuery: String,
     tagVersion: Int,
     onAudioClick: (LocalAudio) -> Unit,
     onEncryptAudio: (LocalAudio) -> Unit
 ) {
     val context = LocalContext.current
+    val tokens = LocalArashiTokens.current
     val matcher = remember { OnlineTagMatcher(context) }
     var selectedAudio by remember { mutableStateOf<LocalAudio?>(null) }
+
+    val filtered = remember(audios, searchQuery) {
+        if (searchQuery.isBlank()) audios
+        else audios.filter { it.title.contains(searchQuery, true) || it.artist.contains(searchQuery, true) }
+    }
 
     Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 160.dp)
+            contentPadding = PaddingValues(bottom = 175.dp)
         ) {
             item {
                 Text(
                     text = "音乐",
-                    color = TextPrimary,
+                    color = tokens.textPrimary,
                     fontSize = 30.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)
                 )
             }
 
-            if (audios.isNotEmpty()) {
+            if (filtered.isNotEmpty()) {
                 item {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
-                        items(audios.take(10), key = { "card_${it.id}_$tagVersion" }) { audio ->
+                        items(filtered.take(10), key = { "card_${it.id}_$tagVersion" }) { audio ->
                             val saved = remember(audio.id, tagVersion) { matcher.getSavedTag(audio.id) }
                             Column(
                                 modifier = Modifier
@@ -277,27 +307,25 @@ fun MusicLibraryScreen(
                                     model = saved?.coverUrl ?: audio.albumArtUri,
                                     contentDescription = audio.title,
                                     contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(136.dp)
-                                        .liquidGlass(RoundedCornerShape(22.dp))
+                                    modifier = Modifier.size(136.dp).arashiSurface(RoundedCornerShape(22.dp))
                                 )
                                 Spacer(Modifier.height(6.dp))
-                                Text(saved?.title?.ifBlank { audio.title } ?: audio.title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-                                Text(saved?.artist?.ifBlank { audio.artist } ?: audio.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1)
+                                Text(saved?.title?.ifBlank { audio.title } ?: audio.title, color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                Text(saved?.artist?.ifBlank { audio.artist } ?: audio.artist, color = tokens.textSecondary, fontSize = 12.sp, maxLines = 1)
                             }
                         }
                     }
-                    Spacer(Modifier.height(22.dp))
+                    Spacer(Modifier.height(20.dp))
                 }
             }
 
-            items(audios, key = { "row_${it.id}_$tagVersion" }) { audio ->
+            items(filtered, key = { "row_${it.id}_$tagVersion" }) { audio ->
                 val saved = remember(audio.id, tagVersion) { matcher.getSavedTag(audio.id) }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 5.dp)
-                        .liquidGlass(RoundedCornerShape(20.dp))
+                        .arashiSurface(RoundedCornerShape(20.dp))
                         .combinedClickable(
                             onClick = { onAudioClick(audio) },
                             onLongClick = { selectedAudio = audio }
@@ -309,14 +337,14 @@ fun MusicLibraryScreen(
                         model = saved?.coverUrl ?: audio.albumArtUri,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(50.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF1A2034))
+                        modifier = Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(tokens.surfaceCard)
                     )
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(saved?.title?.ifBlank { audio.title } ?: audio.title, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-                        Text(saved?.artist?.ifBlank { audio.artist } ?: audio.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1)
+                        Text(saved?.title?.ifBlank { audio.title } ?: audio.title, color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                        Text(saved?.artist?.ifBlank { audio.artist } ?: audio.artist, color = tokens.textSecondary, fontSize = 12.sp, maxLines = 1)
                     }
-                    Text(formatDuration(audio.durationMs), color = TextSecondary, fontSize = 12.sp)
+                    Text(formatDuration(audio.durationMs), color = tokens.textSecondary, fontSize = 12.sp)
                 }
             }
         }
@@ -330,26 +358,23 @@ fun MusicLibraryScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
-                        .liquidGlass(RoundedCornerShape(28.dp), alphaTop = 0.25f, alphaBottom = 0.12f)
+                        .arashiSurface(RoundedCornerShape(28.dp))
                         .clickable(enabled = false) {}
                         .padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(audio.title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text(audio.title, color = tokens.textPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .liquidGlass(RoundedCornerShape(18.dp))
-                            .clickable {
-                                onEncryptAudio(audio)
-                                selectedAudio = null
-                            }
+                            .arashiSurface(RoundedCornerShape(18.dp), elevation = 2.dp)
+                            .clickable { onEncryptAudio(audio); selectedAudio = null }
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Lock, contentDescription = null, tint = GlassCyan)
+                        Icon(Icons.Default.Lock, contentDescription = null, tint = tokens.accent)
                         Spacer(Modifier.width(12.dp))
-                        Text("添加到加密空间", color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text("添加到加密空间", color = tokens.textPrimary, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
