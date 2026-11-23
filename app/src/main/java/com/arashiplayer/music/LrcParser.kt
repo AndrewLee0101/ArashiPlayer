@@ -3,7 +3,7 @@ package com.arashiplayer.music
 import com.arashiplayer.data.LyricLine
 
 object LrcParser {
-    private val lineRegex = Regex("\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?](.*)")
+    private val lineRegex = Regex("""\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?](.*)""")
 
     fun parse(lrcContent: String?): List<LyricLine> {
         if (lrcContent.isNullOrBlank()) return emptyList()
