@@ -1,6 +1,13 @@
 package com.arashiplayer.ui.screens
 
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -244,13 +251,7 @@ fun VaultScreen(
                                 .padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (item.mediaType == VaultMediaType.IMAGE) {
-                                AsyncImage(model = File(item.encryptedPath), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)))
-                            } else {
-                                Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(tokens.accent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-                                    Icon(if (item.mediaType == VaultMediaType.VIDEO) Icons.Default.Movie else Icons.Default.MusicNote, contentDescription = null, tint = tokens.accent)
-                                }
-                            }
+                            VaultMediaThumbnail(item = item)
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(item.originalName, color = tokens.textPrimary, fontWeight = FontWeight.Medium, maxLines = 1)
@@ -533,6 +534,69 @@ fun openAllFilesPermission(context: android.content.Context) {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
+        }
+    }
+}
+
+@Composable
+private fun VaultMediaThumbnail(item: VaultItem) {
+    val tokens = LocalArashiTokens.current
+    if (item.mediaType == VaultMediaType.IMAGE) {
+        AsyncImage(
+            model = File(item.encryptedPath),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF1A202E))
+        )
+        return
+    }
+
+    val previewBitmap by produceState<Bitmap?>(initialValue = null, item.encryptedPath) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                val retriever = MediaMetadataRetriever()
+                retriever.setDataSource(item.encryptedPath)
+                val bmp = if (item.mediaType == VaultMediaType.VIDEO) {
+                    retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        ?: retriever.frameAtTime
+                } else {
+                    retriever.embeddedPicture?.let { bytes -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
+                }
+                retriever.release()
+                bmp
+            }.getOrNull()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .width(if (item.mediaType == VaultMediaType.VIDEO) 88.dp else 64.dp)
+            .height(58.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(tokens.accent.copy(alpha = 0.14f)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (previewBitmap != null) {
+            Image(
+                bitmap = previewBitmap!!.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            if (item.mediaType == VaultMediaType.VIDEO) {
+                Box(
+                    modifier = Modifier.size(26.dp).clip(CircleShape).background(Color(0x88000000)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+            }
+        } else {
+            Icon(
+                if (item.mediaType == VaultMediaType.VIDEO) Icons.Default.Movie else Icons.Default.MusicNote,
+                contentDescription = null,
+                tint = tokens.accent
+            )
         }
     }
 }

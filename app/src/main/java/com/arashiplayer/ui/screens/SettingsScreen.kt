@@ -39,7 +39,7 @@ import com.arashiplayer.vault.PrivacyVaultManager
 
 private const val AUTHOR_XHS_URL = "https://xhslink.cn/o/8vAvNu748Fw"
 private const val AUTHOR_WECHAT = "Naive_guya"
-private const val APP_VERSION_NAME = "v5.0.0"
+private const val APP_VERSION_NAME = "v5.1.0"
 
 @Composable
 fun SettingsScreen(
@@ -176,6 +176,9 @@ fun SettingsScreen(
                             if (versionTapCount >= 3) {
                                 versionTapCount = 0
                                 onOpenHiddenVault()
+                            } else {
+                                val remain = 3 - versionTapCount
+                                Toast.makeText(context, "再点击 ${remain} 次进入隐私空间", Toast.LENGTH_SHORT).show()
                             }
                         }
                     )

@@ -75,6 +75,7 @@ fun AppleMusicPlayerSheet(
     var showTranslation by remember { mutableStateOf(true) }
     var showPhonetics by remember { mutableStateOf(true) }
     var showSearchDialog by remember { mutableStateOf(false) }
+    var selectedSource by remember { mutableStateOf(MusicTagSource.NETEASE) }
     var searchKeyword by remember(track.id) {
         mutableStateOf("${track.title} ${if (track.artist == "<unknown>") "" else track.artist}".trim())
     }
@@ -145,7 +146,7 @@ fun AppleMusicPlayerSheet(
                             showSearchDialog = true
                             scope.launch {
                                 isSearching = true
-                                candidates = matcher.searchCandidates(searchKeyword)
+                                candidates = matcher.searchCandidates(searchKeyword, selectedSource)
                                 isSearching = false
                             }
                         }
@@ -333,7 +334,7 @@ fun AppleMusicPlayerSheet(
                         .clickable(enabled = false) {}
                         .padding(18.dp)
                 ) {
-                    Text("匹配封面、翻译与标音歌词", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text("匹配标签", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(10.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(value = searchKeyword, onValueChange = { searchKeyword = it }, singleLine = true, modifier = Modifier.weight(1f))
@@ -342,13 +343,39 @@ fun AppleMusicPlayerSheet(
                             onClick = {
                                 scope.launch {
                                     isSearching = true
-                                    candidates = matcher.searchCandidates(searchKeyword)
+                                    candidates = matcher.searchCandidates(searchKeyword, selectedSource)
                                     isSearching = false
                                 }
                             },
                             modifier = Modifier.visionGlassCapsule(CircleShape)
                         ) {
                             Icon(Icons.Default.Search, contentDescription = null, tint = Color.White)
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        MusicTagSource.entries.forEach { src ->
+                            val active = src == selectedSource
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(if (active) Color(0x66FFFFFF) else Color(0x22FFFFFF))
+                                    .border(0.8.dp, if (active) Color.White else Color.White.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+                                    .clickable {
+                                        selectedSource = src
+                                        scope.launch {
+                                            isSearching = true
+                                            candidates = matcher.searchCandidates(searchKeyword, src)
+                                            isSearching = false
+                                        }
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Text(src.label, color = Color.White, fontSize = 12.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Normal)
+                            }
                         }
                     }
                     Spacer(Modifier.height(12.dp))
