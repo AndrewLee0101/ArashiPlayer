@@ -4,18 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
-    <!-- Top-Left: Video Play Triangle -->
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M24,22 L36,29 L24,36 Z" />
-
-    <!-- Top-Right: Music Eighth Note -->
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M74,23 L84,21 L84,33 C84,35.2 82.2,37 80,37 C77.8,37 76,35.2 76,33 C76,30.8 77.8,29 80,29 C80.7,29 81.4,29.2 82,29.6 L82,24.5 L76,25.7 L76,35 C76,37.2 74.2,39 72,39 C69.8,39 68,37.2 68,35 C68,32.8 69.8,31 72,31 C72.7,31 73.4,31.2 74,31.6 Z" />
-
-    <!-- Center: Stylized Wind Swirl ("岚" / Arashi) -->
     <path
         android:strokeColor="#E0F7FA"
         android:strokeWidth="4.2"

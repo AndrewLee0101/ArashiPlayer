@@ -2,6 +2,8 @@ package com.arashiplayer.vault
 
 import android.content.Context
 import android.media.MediaScannerConnection
+import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
 import org.json.JSONArray
 import org.json.JSONObject
@@ -9,6 +11,7 @@ import java.io.File
 import java.security.MessageDigest
 
 enum class VaultMediaType { VIDEO, AUDIO, IMAGE }
+enum class VaultLockType { NONE, PIN, PATTERN }
 
 data class VaultItem(
     val id: String,
@@ -19,28 +22,64 @@ data class VaultItem(
     val sizeBytes: Long
 )
 
-/**
- * 零空间占用私密加密管理器（仿 QQ 影音思路）：
- * - 不复制文件字节、不产生额外存储占用，直接原地重命名修改后缀为 `.arashi_enc` 并加前缀 `.` 隐藏
- * - 在所在目录自动写入 `.nomedia` 防止系统相册及其他媒体软件扫描
- * - 同步移除 Android MediaStore 索引，确保系统相册/音乐库立即隐藏
- * - 支持视频、音频、图片三类文件；解密时原地恢复原文件名并重新触发媒体扫描
- */
 class PrivacyVaultManager(private val context: Context) {
 
-    private val prefs = context.getSharedPreferences("arashi_vault_prefs", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences("arashi_vault_v2", Context.MODE_PRIVATE)
     private val indexKey = "vault_items_json"
-    private val pinHashKey = "vault_pin_sha256"
+    private val lockTypeKey = "vault_lock_type"
+    private val pinHashKey = "vault_pin_hash"
+    private val patternHashKey = "vault_pattern_hash"
+    private val biometricKey = "vault_biometric_enabled"
 
-    fun hasPin(): Boolean = !prefs.getString(pinHashKey, null).isNullOrEmpty()
+    fun hasAllFilesAccess(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            true
+        }
+    }
+
+    fun getLockType(): VaultLockType {
+        val name = prefs.getString(lockTypeKey, VaultLockType.NONE.name) ?: VaultLockType.NONE.name
+        return runCatching { VaultLockType.valueOf(name) }.getOrDefault(VaultLockType.NONE)
+    }
+
+    fun isBiometricEnabled(): Boolean = prefs.getBoolean(biometricKey, false)
+
+    fun setBiometricEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(biometricKey, enabled).apply()
+    }
 
     fun setPin(pin: String) {
-        prefs.edit().putString(pinHashKey, sha256(pin)).apply()
+        prefs.edit()
+            .putString(pinHashKey, sha256(pin))
+            .putString(lockTypeKey, VaultLockType.PIN.name)
+            .apply()
     }
 
     fun verifyPin(pin: String): Boolean {
         val saved = prefs.getString(pinHashKey, null) ?: return true
         return saved == sha256(pin)
+    }
+
+    fun setPattern(nodes: List<Int>) {
+        val encoded = nodes.joinToString("-")
+        prefs.edit()
+            .putString(patternHashKey, sha256(encoded))
+            .putString(lockTypeKey, VaultLockType.PATTERN.name)
+            .apply()
+    }
+
+    fun verifyPattern(nodes: List<Int>): Boolean {
+        val saved = prefs.getString(patternHashKey, null) ?: return true
+        return saved == sha256(nodes.joinToString("-"))
+    }
+
+    fun clearLock() {
+        prefs.edit()
+            .putString(lockTypeKey, VaultLockType.NONE.name)
+            .putBoolean(biometricKey, false)
+            .apply()
     }
 
     fun listVaultItems(): List<VaultItem> {
@@ -67,27 +106,22 @@ class PrivacyVaultManager(private val context: Context) {
     }
 
     /**
-     * 原地重命名加密（O(1) 速度，零额外空间占用）
+     * 原地重命名改后缀加密（零额外空间占用）
      */
-    fun encryptInPlace(sourceFile: File, mediaType: VaultMediaType): Result<VaultItem> {
+    fun encryptInPlace(sourcePath: String, mediaType: VaultMediaType): Result<VaultItem> {
+        val sourceFile = File(sourcePath)
         if (!sourceFile.exists()) return Result.failure(IllegalArgumentException("文件不存在"))
-        val parentDir = sourceFile.parentFile ?: return Result.failure(IllegalStateException("无法定位目录"))
+        val parentDir = sourceFile.parentFile ?: return Result.failure(IllegalStateException("目录无效"))
 
-        // 1. 写入 .nomedia 确保系统相册与第三方软件不扫描
         val nomedia = File(parentDir, ".nomedia")
-        if (!nomedia.exists()) {
-            runCatching { nomedia.createNewFile() }
+        if (!nomedia.exists()) runCatching { nomedia.createNewFile() }
+
+        val id = System.currentTimeMillis().toString(16) + "_" + (100..999).random()
+        val hiddenFile = File(parentDir, ".arashi_$id.arashi_enc")
+        if (!sourceFile.renameTo(hiddenFile)) {
+            return Result.failure(SecurityException("PERMISSION_REQUIRED"))
         }
 
-        // 2. 构造隐藏文件名与自定义后缀（原地 renameTo，不拷贝任何字节）
-        val id = System.currentTimeMillis().toString(16)
-        val hiddenFile = File(parentDir, ".arashi_${id}.arashi_enc")
-        val renamed = sourceFile.renameTo(hiddenFile)
-        if (!renamed) {
-            return Result.failure(SecurityException("重命名失败，请授予「所有文件访问权限」"))
-        }
-
-        // 3. 从系统 MediaStore 删除旧记录，使其立即从系统相册/音乐库消失
         removeFromMediaStore(sourceFile.absolutePath, mediaType)
 
         val item = VaultItem(
@@ -102,18 +136,13 @@ class PrivacyVaultManager(private val context: Context) {
         return Result.success(item)
     }
 
-    /**
-     * 原地恢复文件名并重新通知系统相册扫描
-     */
     fun decryptInPlace(item: VaultItem): Result<File> {
         val encFile = File(item.encryptedPath)
-        if (!encFile.exists()) return Result.failure(IllegalArgumentException("加密文件已丢失"))
+        if (!encFile.exists()) return Result.failure(IllegalArgumentException("文件不存在"))
         val targetFile = File(item.originalPath)
-        val renamed = encFile.renameTo(targetFile)
-        if (!renamed) {
-            return Result.failure(SecurityException("恢复文件失败，请检查存储权限"))
+        if (!encFile.renameTo(targetFile)) {
+            return Result.failure(SecurityException("PERMISSION_REQUIRED"))
         }
-
         saveItems(listVaultItems().filterNot { it.id == item.id })
         MediaScannerConnection.scanFile(context, arrayOf(targetFile.absolutePath), null, null)
         return Result.success(targetFile)
@@ -146,7 +175,7 @@ class PrivacyVaultManager(private val context: Context) {
     }
 
     private fun sha256(input: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest("arashi_salt_$input".toByteArray())
+        val digest = MessageDigest.getInstance("SHA-256").digest("arashi_v2_$input".toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
     }
 }
