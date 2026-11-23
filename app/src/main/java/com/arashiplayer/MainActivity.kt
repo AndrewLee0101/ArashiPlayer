@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.FragmentActivity
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -100,26 +101,23 @@ fun ArashiPlayerApp(
     val tagMatcher = remember { OnlineTagMatcher(context) }
     val favoritesStore = remember { FavoritesStore(context) }
 
-    // 独立视频播放器（支持后台音频播放 & 可缩放悬浮小窗无缝切换）
     val videoPlayer = remember { ExoPlayer.Builder(context).build() }
     val musicPlayer = remember { ExoPlayer.Builder(context).build() }
 
     DisposableEffect(Unit) {
-        onDispose {
-            videoPlayer.release()
-            musicPlayer.release()
-        }
+        onDispose { videoPlayer.release(); musicPlayer.release() }
     }
 
     var videos by remember { mutableStateOf<List<LocalVideo>>(emptyList()) }
     var audios by remember { mutableStateOf<List<LocalAudio>>(emptyList()) }
     var images by remember { mutableStateOf<List<LocalImage>>(emptyList()) }
-    var currentTab by remember { mutableIntStateOf(0) }
+    var currentTab by remember { mutableIntStateOf(0) } // 0=视频 1=音乐 2=喜欢 3=设置
+    var showHiddenVault by remember { mutableStateOf(false) }
     var tagVersion by remember { mutableIntStateOf(0) }
+    var favVersion by remember { mutableIntStateOf(0) }
     var showSearchBar by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
 
-    // 视频播放队列、全屏状态、悬浮可调大小小窗状态、后台音频播放状态
     var videoPlaylist by remember { mutableStateOf<List<Pair<Uri, String>>>(emptyList()) }
     var videoIndex by remember { mutableIntStateOf(-1) }
     var isVideoFullScreen by remember { mutableStateOf(false) }
@@ -127,19 +125,17 @@ fun ArashiPlayerApp(
     var isVideoBgAudio by remember { mutableStateOf(false) }
     var isVideoPlaying by remember { mutableStateOf(false) }
 
-    // 可拖动 & 可调节大小的小窗坐标和宽度
     var miniOffsetX by remember { mutableFloatStateOf(300f) }
     var miniOffsetY by remember { mutableFloatStateOf(900f) }
     var miniWidthDp by remember { mutableFloatStateOf(210f) }
 
-    // 音乐播放状态
     var activeTrack by remember { mutableStateOf<LocalAudio?>(null) }
     var isMusicPlaying by remember { mutableStateOf(false) }
+    var musicPlayMode by remember { mutableStateOf(MusicPlayMode.ORDER) }
     var musicPosMs by remember { mutableLongStateOf(0L) }
     var musicDurMs by remember { mutableLongStateOf(0L) }
     var showFullMusicSheet by remember { mutableStateOf(false) }
 
-    // 主界面二次返回退出计时
     var lastBackPressMs by remember { mutableLongStateOf(0L) }
 
     fun refreshAll() {
@@ -150,26 +146,21 @@ fun ArashiPlayerApp(
         }
     }
 
+    LaunchedEffect(musicPlayMode) {
+        musicPlayer.repeatMode = if (musicPlayMode == MusicPlayMode.SINGLE_LOOP) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+    }
+
     val permissions = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(
-                Manifest.permission.READ_MEDIA_VIDEO,
-                Manifest.permission.READ_MEDIA_AUDIO,
-                Manifest.permission.READ_MEDIA_IMAGES
-            )
+            arrayOf(Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_IMAGES)
         } else {
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
     }
 
-    val permLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { refreshAll() }
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { refreshAll() }
 
-    LaunchedEffect(Unit) {
-        permLauncher.launch(permissions)
-        refreshAll()
-    }
+    LaunchedEffect(Unit) { permLauncher.launch(permissions); refreshAll() }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -181,19 +172,16 @@ fun ArashiPlayerApp(
         }
     }
 
-    // 搜索栏打开时按返回先收起搜索栏
     if (showSearchBar) {
         BackHandler { searchQuery = ""; showSearchBar = false }
-    } else if (!isVideoFullScreen && !showFullMusicSheet) {
-        // 主界面二次返回退出
+    } else if (!isVideoFullScreen && !showFullMusicSheet && !showHiddenVault) {
         BackHandler {
             if (currentTab != 0) {
                 currentTab = 0
             } else {
                 val now = System.currentTimeMillis()
-                if (now - lastBackPressMs <= 2000L) {
-                    onExitApp()
-                } else {
+                if (now - lastBackPressMs <= 2000L) onExitApp()
+                else {
                     lastBackPressMs = now
                     Toast.makeText(context, "再按一次退出岚播放器", Toast.LENGTH_SHORT).show()
                 }
@@ -201,7 +189,6 @@ fun ArashiPlayerApp(
         }
     }
 
-    // 全屏视频播放页
     if (isVideoFullScreen && videoIndex in videoPlaylist.indices) {
         val (uri, title) = videoPlaylist[videoIndex]
         VideoPlayerScreen(
@@ -212,60 +199,84 @@ fun ArashiPlayerApp(
             hasNext = videoIndex < videoPlaylist.lastIndex,
             onPrevVideo = { if (videoIndex > 0) videoIndex-- },
             onNextVideo = { if (videoIndex < videoPlaylist.lastIndex) videoIndex++ },
-            onEnterMiniWindow = {
-                isVideoFullScreen = false
-                isVideoMiniWindow = true
-                isVideoBgAudio = false
-            },
+            onEnterMiniWindow = { isVideoFullScreen = false; isVideoMiniWindow = true; isVideoBgAudio = false },
             onBackgroundAudioMode = {
-                isVideoFullScreen = false
-                isVideoMiniWindow = false
-                isVideoBgAudio = true
+                isVideoFullScreen = false; isVideoMiniWindow = false; isVideoBgAudio = true
                 Toast.makeText(context, "已切入后台音频播放", Toast.LENGTH_SHORT).show()
             },
-            onBack = {
-                videoPlayer.pause()
-                isVideoFullScreen = false
-                isVideoMiniWindow = false
-                isVideoBgAudio = false
-            }
+            onBack = { videoPlayer.pause(); isVideoFullScreen = false; isVideoMiniWindow = false; isVideoBgAudio = false }
         )
         return
     }
 
-    // 全屏音乐播放页
     if (showFullMusicSheet && activeTrack != null) {
         val current = activeTrack!!
+        val isFav = remember(current.path, favVersion) { favoritesStore.isFavorite(current.path) }
         AppleMusicPlayerSheet(
             track = current,
             isPlaying = isMusicPlaying,
+            playMode = musicPlayMode,
+            isFavorite = isFav,
             currentPositionMs = musicPosMs,
             durationMs = musicDurMs,
             onSeekTo = { musicPlayer.seekTo(it) },
             onTogglePlay = { if (musicPlayer.isPlaying) musicPlayer.pause() else musicPlayer.play() },
             onNext = {
-                val idx = audios.indexOfFirst { it.id == current.id }
                 if (audios.isNotEmpty()) {
-                    val next = audios[(idx + 1) % audios.size]
+                    val idx = audios.indexOfFirst { it.id == current.id }
+                    val next = if (musicPlayMode == MusicPlayMode.SHUFFLE) audios.random() else audios[(idx + 1) % audios.size]
                     activeTrack = next
                     musicPlayer.setMediaItem(MediaItem.fromUri(next.uri))
-                    musicPlayer.prepare()
-                    musicPlayer.play()
+                    musicPlayer.prepare(); musicPlayer.play()
                 }
             },
             onPrev = {
-                val idx = audios.indexOfFirst { it.id == current.id }
                 if (audios.isNotEmpty()) {
+                    val idx = audios.indexOfFirst { it.id == current.id }
                     val prev = audios[(idx - 1 + audios.size) % audios.size]
                     activeTrack = prev
                     musicPlayer.setMediaItem(MediaItem.fromUri(prev.uri))
-                    musicPlayer.prepare()
-                    musicPlayer.play()
+                    musicPlayer.prepare(); musicPlayer.play()
                 }
             },
+            onCyclePlayMode = {
+                musicPlayMode = when (musicPlayMode) {
+                    MusicPlayMode.ORDER -> MusicPlayMode.SINGLE_LOOP
+                    MusicPlayMode.SINGLE_LOOP -> MusicPlayMode.SHUFFLE
+                    MusicPlayMode.SHUFFLE -> MusicPlayMode.ORDER
+                }
+            },
+            onToggleFavorite = { favoritesStore.toggleFavorite(current.path); favVersion++ },
             onTagSaved = { tagVersion++ },
             onClose = { showFullMusicSheet = false }
         )
+        return
+    }
+
+    if (showHiddenVault) {
+        ArashiBackdrop {
+            VaultScreen(
+                vaultManager = vaultManager,
+                allVideos = videos,
+                allAudios = audios,
+                allImages = images,
+                onRefreshMedia = { refreshAll() },
+                onPlayVaultVideo = { item ->
+                    musicPlayer.pause()
+                    videoPlaylist = listOf(Uri.fromFile(File(item.encryptedPath)) to item.originalName)
+                    videoIndex = 0
+                    isVideoFullScreen = true; isVideoMiniWindow = false; isVideoBgAudio = false
+                },
+                onPlayVaultAudio = { item ->
+                    val audio = LocalAudio(item.id.hashCode().toLong(), item.originalName, "隐私音频", "", item.encryptedPath, Uri.fromFile(File(item.encryptedPath)), null, 0L)
+                    activeTrack = audio
+                    musicPlayer.setMediaItem(MediaItem.fromUri(audio.uri))
+                    musicPlayer.prepare(); musicPlayer.play()
+                    showFullMusicSheet = true
+                },
+                onBack = { showHiddenVault = false }
+            )
+        }
         return
     }
 
@@ -275,15 +286,14 @@ fun ArashiPlayerApp(
                 videos = videos,
                 searchQuery = searchQuery,
                 favoritesStore = favoritesStore,
+                favVersion = favVersion,
+                onFavoriteChanged = { favVersion++ },
                 onToggleSearch = { showSearchBar = !showSearchBar },
-                onOpenVault = { currentTab = 2 },
                 onVideoClick = { clicked, list ->
                     musicPlayer.pause()
                     videoPlaylist = list.map { it.uri to it.title }
                     videoIndex = list.indexOfFirst { it.id == clicked.id }.coerceAtLeast(0)
-                    isVideoFullScreen = true
-                    isVideoMiniWindow = false
-                    isVideoBgAudio = false
+                    isVideoFullScreen = true; isVideoMiniWindow = false; isVideoBgAudio = false
                 },
                 onRenameVideo = { v, newName ->
                     if (!vaultManager.hasAllFilesAccess()) openAllFilesPermission(context)
@@ -303,15 +313,14 @@ fun ArashiPlayerApp(
                 searchQuery = searchQuery,
                 tagVersion = tagVersion,
                 favoritesStore = favoritesStore,
+                favVersion = favVersion,
+                onFavoriteChanged = { favVersion++ },
                 onToggleSearch = { showSearchBar = !showSearchBar },
                 onAudioClick = { audio ->
-                    videoPlayer.pause()
-                    isVideoMiniWindow = false
-                    isVideoBgAudio = false
+                    videoPlayer.pause(); isVideoMiniWindow = false; isVideoBgAudio = false
                     activeTrack = audio
                     musicPlayer.setMediaItem(MediaItem.fromUri(audio.uri))
-                    musicPlayer.prepare()
-                    musicPlayer.play()
+                    musicPlayer.prepare(); musicPlayer.play()
                     showFullMusicSheet = true
                 },
                 onRenameAudio = { a, newName ->
@@ -327,35 +336,24 @@ fun ArashiPlayerApp(
                     else { list.forEach { vaultManager.encryptInPlace(it.path, VaultMediaType.AUDIO) }; refreshAll() }
                 }
             )
-            2 -> VaultScreen(
-                vaultManager = vaultManager,
-                allVideos = videos,
-                allAudios = audios,
-                allImages = images,
-                onRefreshMedia = { refreshAll() },
-                onPlayVaultVideo = { item ->
+            2 -> FavoritesScreen(
+                videos = videos,
+                audios = audios,
+                favoritesStore = favoritesStore,
+                favVersion = favVersion,
+                tagVersion = tagVersion,
+                onToggleFav = { path -> favoritesStore.toggleFavorite(path); favVersion++ },
+                onVideoClick = { clicked, list ->
                     musicPlayer.pause()
-                    videoPlaylist = listOf(Uri.fromFile(File(item.encryptedPath)) to item.originalName)
-                    videoIndex = 0
-                    isVideoFullScreen = true
-                    isVideoMiniWindow = false
-                    isVideoBgAudio = false
+                    videoPlaylist = list.map { it.uri to it.title }
+                    videoIndex = list.indexOfFirst { it.id == clicked.id }.coerceAtLeast(0)
+                    isVideoFullScreen = true; isVideoMiniWindow = false; isVideoBgAudio = false
                 },
-                onPlayVaultAudio = { item ->
-                    val audio = LocalAudio(
-                        id = item.id.hashCode().toLong(),
-                        title = item.originalName,
-                        artist = "私密音频",
-                        album = "",
-                        path = item.encryptedPath,
-                        uri = Uri.fromFile(File(item.encryptedPath)),
-                        albumArtUri = null,
-                        durationMs = 0L
-                    )
+                onAudioClick = { audio ->
+                    videoPlayer.pause(); isVideoMiniWindow = false; isVideoBgAudio = false
                     activeTrack = audio
                     musicPlayer.setMediaItem(MediaItem.fromUri(audio.uri))
-                    musicPlayer.prepare()
-                    musicPlayer.play()
+                    musicPlayer.prepare(); musicPlayer.play()
                     showFullMusicSheet = true
                 }
             )
@@ -363,11 +361,11 @@ fun ArashiPlayerApp(
                 themeState = themeState,
                 onThemeChange = onThemeChange,
                 vaultManager = vaultManager,
-                onRefreshMedia = { refreshAll() }
+                onRefreshMedia = { refreshAll() },
+                onOpenHiddenVault = { showHiddenVault = true }
             )
         }
 
-        // 顶部搜索浮条
         if (showSearchBar) {
             Row(
                 modifier = Modifier
@@ -400,7 +398,7 @@ fun ArashiPlayerApp(
             }
         }
 
-        // 可拖动 & 右下角可自由缩放大小的悬浮液态玻璃小窗
+        // 可拖动 & 右下角缩放悬浮小窗
         if (isVideoMiniWindow && videoIndex in videoPlaylist.indices) {
             val miniHeightDp = miniWidthDp * 9f / 16f
             Box(
@@ -413,47 +411,22 @@ fun ArashiPlayerApp(
                     .background(Color.Black)
                     .pointerInput(Unit) {
                         detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            miniOffsetX += dragAmount.x
-                            miniOffsetY += dragAmount.y
+                            change.consume(); miniOffsetX += dragAmount.x; miniOffsetY += dragAmount.y
                         }
                     }
             ) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { ctx ->
-                        PlayerView(ctx).apply {
-                            player = videoPlayer
-                            useController = false
-                        }
-                    }
-                )
-                // 右上角全屏与关闭按钮
-                Row(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    IconButton(
-                        onClick = { isVideoMiniWindow = false; isVideoFullScreen = true },
-                        modifier = Modifier.size(26.dp).visionGlassCapsule(CircleShape)
-                    ) {
+                AndroidView(modifier = Modifier.fillMaxSize(), factory = { ctx -> PlayerView(ctx).apply { player = videoPlayer; useController = false } })
+                Row(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(onClick = { isVideoMiniWindow = false; isVideoFullScreen = true }, modifier = Modifier.size(26.dp).visionGlassCapsule(CircleShape)) {
                         Icon(Icons.Default.OpenInFull, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                     }
-                    IconButton(
-                        onClick = { videoPlayer.pause(); isVideoMiniWindow = false },
-                        modifier = Modifier.size(26.dp).visionGlassCapsule(CircleShape)
-                    ) {
+                    IconButton(onClick = { videoPlayer.pause(); isVideoMiniWindow = false }, modifier = Modifier.size(26.dp).visionGlassCapsule(CircleShape)) {
                         Icon(Icons.Default.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
                     }
                 }
-                // 中央播放/暂停
-                IconButton(
-                    onClick = { if (videoPlayer.isPlaying) videoPlayer.pause() else videoPlayer.play() },
-                    modifier = Modifier.align(Alignment.Center).size(36.dp).visionGlassCapsule(CircleShape)
-                ) {
+                IconButton(onClick = { if (videoPlayer.isPlaying) videoPlayer.pause() else videoPlayer.play() }, modifier = Modifier.align(Alignment.Center).size(36.dp).visionGlassCapsule(CircleShape)) {
                     Icon(if (isVideoPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                 }
-                // 右下角拖拽缩放手柄（自由调节小窗大小）
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -462,8 +435,7 @@ fun ArashiPlayerApp(
                         .background(Color(0x88000000))
                         .pointerInput(Unit) {
                             detectDragGestures { change, dragAmount ->
-                                change.consume()
-                                miniWidthDp = (miniWidthDp + dragAmount.x * 0.6f).coerceIn(150f, 340f)
+                                change.consume(); miniWidthDp = (miniWidthDp + dragAmount.x * 0.6f).coerceIn(150f, 340f)
                             }
                         },
                     contentAlignment = Alignment.Center
@@ -473,22 +445,16 @@ fun ArashiPlayerApp(
             }
         }
 
-        // 底部悬浮控制条（视频后台音频条 / 音乐 Mini 条）+ 带完整图标的液态玻璃胶囊底栏
+        // 底部悬浮栏 + 4 图标液态玻璃底栏（视频 / 音乐 / 喜欢 / 设置）
         Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(horizontal = 18.dp, vertical = 10.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (isVideoBgAudio && videoIndex in videoPlaylist.indices) {
                 val title = videoPlaylist[videoIndex].second
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .arashiSurface(RoundedCornerShape(22.dp))
-                        .clickable { isVideoBgAudio = false; isVideoFullScreen = true }
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(22.dp))
+                        .clickable { isVideoBgAudio = false; isVideoFullScreen = true }.padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(Icons.Default.Headphones, contentDescription = null, tint = tokens.accent)
@@ -505,28 +471,13 @@ fun ArashiPlayerApp(
                 activeTrack?.let { track ->
                     val saved = remember(track.id, tagVersion) { tagMatcher.getSavedTag(track.id) }
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .arashiSurface(RoundedCornerShape(22.dp))
-                            .clickable { showFullMusicSheet = true }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(22.dp))
+                            .clickable { showFullMusicSheet = true }.padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        AsyncImage(
-                            model = saved?.coverUrl ?: track.albumArtUri,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.size(38.dp).clip(RoundedCornerShape(10.dp))
-                        )
+                        AsyncImage(model = saved?.coverUrl ?: track.albumArtUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)))
                         Spacer(Modifier.width(10.dp))
-                        Text(
-                            text = "${saved?.title?.ifBlank { track.title } ?: track.title} · ${saved?.artist?.ifBlank { track.artist } ?: track.artist}",
-                            color = tokens.textPrimary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            modifier = Modifier.weight(1f)
-                        )
+                        Text("${saved?.title?.ifBlank { track.title } ?: track.title} · ${saved?.artist?.ifBlank { track.artist } ?: track.artist}", color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f))
                         IconButton(onClick = { if (musicPlayer.isPlaying) musicPlayer.pause() else musicPlayer.play() }) {
                             Icon(if (isMusicPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = tokens.textPrimary)
                         }
@@ -534,18 +485,14 @@ fun ArashiPlayerApp(
                 }
             }
 
-            // 底部液态玻璃悬浮胶囊导航栏（带完整图标 + 文字）
             val navItems = listOf(
                 Triple(0, "视频", Icons.Default.PlayCircle),
                 Triple(1, "音乐", Icons.Default.MusicNote),
-                Triple(2, "私密", Icons.Default.Lock),
+                Triple(2, "喜欢", Icons.Default.FavoriteBorder),
                 Triple(3, "设置", Icons.Default.Settings)
             )
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .arashiSurface(RoundedCornerShape(32.dp))
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(32.dp)).padding(horizontal = 8.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {

@@ -38,8 +38,9 @@ fun VideoLibraryScreen(
     videos: List<LocalVideo>,
     searchQuery: String,
     favoritesStore: FavoritesStore,
+    favVersion: Int,
+    onFavoriteChanged: () -> Unit,
     onToggleSearch: () -> Unit,
-    onOpenVault: () -> Unit,
     onVideoClick: (LocalVideo, List<LocalVideo>) -> Unit,
     onRenameVideo: (LocalVideo, String) -> Unit,
     onDeleteVideos: (List<LocalVideo>) -> Unit,
@@ -50,7 +51,6 @@ fun VideoLibraryScreen(
     var activeFolder by remember { mutableStateOf<String?>(null) }
     var multiSelectMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
-    var favVersion by remember { mutableIntStateOf(0) }
     var renameTarget by remember { mutableStateOf<LocalVideo?>(null) }
 
     val baseVideos = remember(videos, searchQuery, activeFolder) {
@@ -126,9 +126,7 @@ fun VideoLibraryScreen(
                 IconButton(onClick = onToggleSearch) {
                     Icon(Icons.Default.Search, contentDescription = null, tint = tokens.textPrimary)
                 }
-                IconButton(onClick = onOpenVault) {
-                    Icon(Icons.Default.Lock, contentDescription = null, tint = tokens.textPrimary)
-                }
+
             }
 
             // 批量操作条（全选/多选时在顶部出现）
@@ -146,7 +144,7 @@ fun VideoLibraryScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("喜欢", color = tokens.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable {
                             baseVideos.filter { it.id in selectedIds }.forEach { favoritesStore.toggleFavorite(it.path) }
-                            favVersion++; multiSelectMode = false; selectedIds = emptySet()
+                            onFavoriteChanged(); multiSelectMode = false; selectedIds = emptySet()
                         })
                         Text("加密", color = tokens.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable {
                             val chosen = baseVideos.filter { it.id in selectedIds }
@@ -200,7 +198,7 @@ fun VideoLibraryScreen(
                                         },
                                         onRename = { renameTarget = video },
                                         onDelete = { onDeleteVideos(listOf(video)) },
-                                        onToggleFav = { favoritesStore.toggleFavorite(video.path); favVersion++ },
+                                        onToggleFav = { favoritesStore.toggleFavorite(video.path); onFavoriteChanged() },
                                         onEncrypt = { onEncryptVideos(listOf(video)) }
                                     )
                                 }
@@ -229,7 +227,7 @@ fun VideoLibraryScreen(
                                         },
                                         onRename = { renameTarget = video },
                                         onDelete = { onDeleteVideos(listOf(video)) },
-                                        onToggleFav = { favoritesStore.toggleFavorite(video.path); favVersion++ },
+                                        onToggleFav = { favoritesStore.toggleFavorite(video.path); onFavoriteChanged() },
                                         onEncrypt = { onEncryptVideos(listOf(video)) }
                                     )
                                 }
@@ -252,7 +250,7 @@ fun VideoLibraryScreen(
                             },
                             onRename = { renameTarget = video },
                             onDelete = { onDeleteVideos(listOf(video)) },
-                            onToggleFav = { favoritesStore.toggleFavorite(video.path); favVersion++ },
+                            onToggleFav = { favoritesStore.toggleFavorite(video.path); onFavoriteChanged() },
                             onEncrypt = { onEncryptVideos(listOf(video)) }
                         )
                     }
@@ -424,6 +422,8 @@ fun MusicLibraryScreen(
     searchQuery: String,
     tagVersion: Int,
     favoritesStore: FavoritesStore,
+    favVersion: Int,
+    onFavoriteChanged: () -> Unit,
     onToggleSearch: () -> Unit,
     onAudioClick: (LocalAudio) -> Unit,
     onRenameAudio: (LocalAudio, String) -> Unit,
@@ -435,7 +435,6 @@ fun MusicLibraryScreen(
     val matcher = remember { OnlineTagMatcher(context) }
     var multiSelectMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
-    var favVersion by remember { mutableIntStateOf(0) }
     var renameTarget by remember { mutableStateOf<LocalAudio?>(null) }
 
     val filtered = remember(audios, searchQuery) {
@@ -491,7 +490,7 @@ fun MusicLibraryScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("喜欢", color = tokens.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable {
                             filtered.filter { it.id in selectedIds }.forEach { favoritesStore.toggleFavorite(it.path) }
-                            favVersion++; multiSelectMode = false; selectedIds = emptySet()
+                            onFavoriteChanged(); multiSelectMode = false; selectedIds = emptySet()
                         })
                         Text("加密", color = tokens.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable {
                             onEncryptAudios(filtered.filter { it.id in selectedIds })
@@ -558,7 +557,7 @@ fun MusicLibraryScreen(
                             onDismiss = { menuExpanded = false },
                             onRename = { menuExpanded = false; renameTarget = audio },
                             onDelete = { menuExpanded = false; onDeleteAudios(listOf(audio)) },
-                            onToggleFav = { menuExpanded = false; favoritesStore.toggleFavorite(audio.path); favVersion++ },
+                            onToggleFav = { menuExpanded = false; favoritesStore.toggleFavorite(audio.path); onFavoriteChanged() },
                             onEncrypt = { menuExpanded = false; onEncryptAudios(listOf(audio)) }
                         )
                     }

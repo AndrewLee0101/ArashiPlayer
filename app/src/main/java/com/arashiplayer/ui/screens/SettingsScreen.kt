@@ -1,7 +1,11 @@
 package com.arashiplayer.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -34,18 +38,26 @@ import com.arashiplayer.ui.theme.*
 import com.arashiplayer.vault.PrivacyVaultManager
 
 private const val AUTHOR_XHS_URL = "https://xhslink.cn/o/8vAvNu748Fw"
+private const val AUTHOR_WECHAT = "Naive_guya"
+private const val APP_VERSION_NAME = "v5.0.0"
 
 @Composable
 fun SettingsScreen(
     themeState: ArashiThemeState,
     onThemeChange: (ArashiThemeState) -> Unit,
     vaultManager: PrivacyVaultManager,
-    onRefreshMedia: () -> Unit
+    onRefreshMedia: () -> Unit,
+    onOpenHiddenVault: () -> Unit
 ) {
     val context = LocalContext.current
     val tokens = LocalArashiTokens.current
     var showThemeStudio by remember { mutableStateOf(false) }
     var showRewardQr by remember { mutableStateOf(false) }
+    var showVaultLockSettings by remember { mutableStateOf(false) }
+
+    // 连续 3 击版本号开启隐藏隐私空间
+    var versionTapCount by remember { mutableIntStateOf(0) }
+    var lastVersionTapMs by remember { mutableLongStateOf(0L) }
 
     if (showThemeStudio) {
         BackHandler { showThemeStudio = false }
@@ -60,28 +72,41 @@ fun SettingsScreen(
     Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
-            contentPadding = PaddingValues(bottom = 160.dp),
+            contentPadding = PaddingValues(bottom = 175.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
                 Spacer(Modifier.height(8.dp))
-                Text("设置", color = tokens.textPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(4.dp))
+                Text("设置", color = tokens.textPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
             }
 
+            // 分组 1：外观主题、隐私解锁设置、存储权限、重新扫描
             item {
-                Column(modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(26.dp)).padding(vertical = 4.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().arashiSurface().padding(vertical = 4.dp)) {
                     SettingsRow(
                         icon = Icons.Default.Palette,
                         iconTint = tokens.accent,
                         title = "外观与主题",
                         trailing = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(if (themeState.style == UiStyleMode.MATERIAL_YOU) "Material You" else "液态玻璃", color = tokens.textSecondary, fontSize = 13.sp)
+                                Text(if (themeState.style == UiStyleMode.MATERIAL_YOU) "Material You" else "液态玻璃 · 可调节", color = tokens.textSecondary, fontSize = 12.sp)
                                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.textSecondary)
                             }
                         },
                         onClick = { showThemeStudio = true }
+                    )
+                    HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
+                    SettingsRow(
+                        icon = Icons.Default.Security,
+                        iconTint = tokens.accent,
+                        title = "隐私解锁设置",
+                        trailing = {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("密码 · 手势 · 指纹", color = tokens.textSecondary, fontSize = 12.sp)
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.textSecondary)
+                            }
+                        },
+                        onClick = { showVaultLockSettings = true }
                     )
                     HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
                     SettingsRow(
@@ -106,11 +131,78 @@ fun SettingsScreen(
             }
 
             item {
-                Text("关于与支持", color = tokens.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp, top = 4.dp))
+                Text("关于", color = tokens.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 6.dp, top = 2.dp))
             }
 
+            // 分组 2：关于（图标 + 版本号 3 击进隐私空间 + 作者微信 + 红框小红书 + 赞赏作者）
             item {
-                Column(modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(26.dp)).padding(vertical = 4.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().arashiSurface().padding(vertical = 8.dp)) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.app_logo_icon),
+                            contentDescription = "岚播放器",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(16.dp))
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text("岚播放器", color = tokens.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        Text(APP_VERSION_NAME, color = tokens.textSecondary, fontSize = 12.sp)
+                    }
+
+                    HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
+
+                    // 3 击版本号开启隐私空间
+                    SettingsRow(
+                        icon = Icons.Default.Info,
+                        iconTint = tokens.accent,
+                        title = "版本号",
+                        trailing = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(APP_VERSION_NAME, color = tokens.textSecondary, fontSize = 14.sp)
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.textSecondary)
+                            }
+                        },
+                        onClick = {
+                            val now = System.currentTimeMillis()
+                            if (now - lastVersionTapMs <= 1200L) {
+                                versionTapCount += 1
+                            } else {
+                                versionTapCount = 1
+                            }
+                            lastVersionTapMs = now
+                            if (versionTapCount >= 3) {
+                                versionTapCount = 0
+                                onOpenHiddenVault()
+                            }
+                        }
+                    )
+
+                    HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
+
+                    // 作者微信（点击一键复制）
+                    SettingsRow(
+                        icon = Icons.Default.PersonOutline,
+                        iconTint = Color(0xFF07C160),
+                        title = "作者微信",
+                        trailing = {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(AUTHOR_WECHAT, color = tokens.textSecondary, fontSize = 14.sp)
+                                Icon(Icons.Default.ContentCopy, contentDescription = null, tint = tokens.textSecondary, modifier = Modifier.size(16.dp))
+                            }
+                        },
+                        onClick = {
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            cm.setPrimaryClip(ClipData.newPlainText("WeChat", AUTHOR_WECHAT))
+                            Toast.makeText(context, "已复制微信号: $AUTHOR_WECHAT", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+
+                    HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
+
+                    // 联系作者（红框小红书）
                     SettingsRow(
                         icon = Icons.Default.ChatBubbleOutline,
                         iconTint = Color(0xFFFF2442),
@@ -131,7 +223,10 @@ fun SettingsScreen(
                         },
                         onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AUTHOR_XHS_URL))) } }
                     )
+
                     HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
+
+                    // 赞赏作者
                     SettingsRow(
                         icon = Icons.Default.Favorite,
                         iconTint = Color(0xFFD9A326),
@@ -141,6 +236,11 @@ fun SettingsScreen(
                     )
                 }
             }
+        }
+
+        if (showVaultLockSettings) {
+            BackHandler { showVaultLockSettings = false }
+            VaultSecurityDialog(vaultManager = vaultManager, onDismiss = { showVaultLockSettings = false })
         }
 
         if (showRewardQr) {
@@ -182,12 +282,12 @@ private fun SettingsRow(
 ) {
     val tokens = LocalArashiTokens.current
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 18.dp, vertical = 16.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 18.dp, vertical = 15.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(21.dp))
         Spacer(Modifier.width(14.dp))
-        Text(title, color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        Text(title, color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
         trailing()
     }
 }
@@ -251,7 +351,7 @@ fun ThemeStudioScreen(
         item {
             Text("主题配色", color = tokens.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(12.dp))
-            Column(modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(24.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().arashiSurface().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     ThemePresets.take(4).forEach { preset ->
                         ColorSwatchItem(preset.name, preset.accent, themeState.customAccentArgb == null && themeState.presetId == preset.id) {
@@ -293,26 +393,34 @@ fun ThemeStudioScreen(
             }
         }
 
+        // 液态玻璃可调节参数（通透度 / 高光描边 / 圆角）+ Material You 动态取色
         item {
-            Column(modifier = Modifier.fillMaxWidth().arashiSurface(RoundedCornerShape(24.dp)).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().arashiSurface().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("液态玻璃细节调节", color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("玻璃通透度", color = tokens.textPrimary, fontWeight = FontWeight.Medium)
+                    Text("玻璃通透度", color = tokens.textPrimary, fontSize = 14.sp)
                     Text("${(themeState.glassTransparency * 100).toInt()}%", color = tokens.textSecondary, fontSize = 13.sp)
                 }
-                Slider(
-                    value = themeState.glassTransparency,
-                    onValueChange = { onThemeChange(themeState.copy(glassTransparency = it)) },
-                    valueRange = 0.2f..1.0f,
-                    colors = SliderDefaults.colors(thumbColor = tokens.accent, activeTrackColor = tokens.accent)
-                )
+                Slider(value = themeState.glassTransparency, onValueChange = { onThemeChange(themeState.copy(glassTransparency = it)) }, valueRange = 0.2f..1.0f)
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("高光描边强度", color = tokens.textPrimary, fontSize = 14.sp)
+                    Text("${(themeState.glassHighlight * 100).toInt()}%", color = tokens.textSecondary, fontSize = 13.sp)
+                }
+                Slider(value = themeState.glassHighlight, onValueChange = { onThemeChange(themeState.copy(glassHighlight = it)) }, valueRange = 0.1f..1.0f)
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("卡片圆角", color = tokens.textPrimary, fontSize = 14.sp)
+                    Text("${themeState.cornerRadiusDp.toInt()} dp", color = tokens.textSecondary, fontSize = 13.sp)
+                }
+                Slider(value = themeState.cornerRadiusDp, onValueChange = { onThemeChange(themeState.copy(cornerRadiusDp = it)) }, valueRange = 12f..32f)
+
                 HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f))
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("动态取色 (Material You)", color = tokens.textPrimary, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                     Switch(
                         checked = themeState.dynamicMonet,
-                        onCheckedChange = {
-                            onThemeChange(themeState.copy(dynamicMonet = it, style = if (it) UiStyleMode.MATERIAL_YOU else themeState.style))
-                        }
+                        onCheckedChange = { onThemeChange(themeState.copy(dynamicMonet = it, style = if (it) UiStyleMode.MATERIAL_YOU else themeState.style)) }
                     )
                 }
             }
@@ -329,7 +437,7 @@ private fun StylePreviewCard(title: String, selected: Boolean, previewBrush: Bru
             .clickable { onClick() }.padding(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(modifier = Modifier.fillMaxWidth().height(82.dp).clip(RoundedCornerShape(16.dp)).background(previewBrush))
+        Box(modifier = Modifier.fillMaxWidth().height(80.dp).clip(RoundedCornerShape(16.dp)).background(previewBrush))
         Spacer(Modifier.height(8.dp))
         Text(title, color = tokens.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
     }

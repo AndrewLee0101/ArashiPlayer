@@ -53,6 +53,8 @@ data class ArashiThemeState(
     val presetId: String = "glacier",
     val customAccentArgb: Int? = null,
     val glassTransparency: Float = 0.65f,
+    val glassHighlight: Float = 0.75f,
+    val cornerRadiusDp: Float = 22f,
     val dynamicMonet: Boolean = true
 ) {
     fun resolveAccent(): Color {
@@ -62,7 +64,7 @@ data class ArashiThemeState(
 }
 
 class ThemePrefsStore(context: Context) {
-    private val prefs = context.getSharedPreferences("arashi_theme_v4", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences("arashi_theme_v5", Context.MODE_PRIVATE)
 
     fun load(): ArashiThemeState {
         val style = runCatching {
@@ -75,8 +77,10 @@ class ThemePrefsStore(context: Context) {
         val hasCustom = prefs.getBoolean("hasCustom", false)
         val customArgb = if (hasCustom) prefs.getInt("customArgb", Color(0xFF0A84FF).toArgb()) else null
         val glassAlpha = prefs.getFloat("glassTransparency", 0.65f)
+        val glassHighlight = prefs.getFloat("glassHighlight", 0.75f)
+        val cornerRadius = prefs.getFloat("cornerRadiusDp", 22f)
         val dynamicMonet = prefs.getBoolean("dynamicMonet", true)
-        return ArashiThemeState(style, darkMode, presetId, customArgb, glassAlpha, dynamicMonet)
+        return ArashiThemeState(style, darkMode, presetId, customArgb, glassAlpha, glassHighlight, cornerRadius, dynamicMonet)
     }
 
     fun save(state: ArashiThemeState) {
@@ -87,6 +91,8 @@ class ThemePrefsStore(context: Context) {
             .putBoolean("hasCustom", state.customAccentArgb != null)
             .putInt("customArgb", state.customAccentArgb ?: 0)
             .putFloat("glassTransparency", state.glassTransparency)
+            .putFloat("glassHighlight", state.glassHighlight)
+            .putFloat("cornerRadiusDp", state.cornerRadiusDp)
             .putBoolean("dynamicMonet", state.dynamicMonet)
             .apply()
     }
@@ -100,7 +106,9 @@ data class ArashiVisualTokens(
     val surfaceCard: Color,
     val textPrimary: Color,
     val textSecondary: Color,
-    val glassTransparency: Float
+    val glassTransparency: Float,
+    val glassHighlight: Float,
+    val cornerRadiusDp: Float
 )
 
 val LocalArashiTokens = staticCompositionLocalOf {
@@ -112,7 +120,9 @@ val LocalArashiTokens = staticCompositionLocalOf {
         surfaceCard = Color(0xDDFFFFFF),
         textPrimary = Color(0xFF121620),
         textSecondary = Color(0xFF6B7384),
-        glassTransparency = 0.65f
+        glassTransparency = 0.65f,
+        glassHighlight = 0.75f,
+        cornerRadiusDp = 22f
     )
 }
 
@@ -164,7 +174,9 @@ fun ArashiPlayerTheme(
         else if (isDark) Color(0xFF191F2E) else Color.White,
         textPrimary = colorScheme.onBackground,
         textSecondary = colorScheme.onBackground.copy(alpha = 0.58f),
-        glassTransparency = themeState.glassTransparency
+        glassTransparency = themeState.glassTransparency,
+        glassHighlight = themeState.glassHighlight,
+        cornerRadiusDp = themeState.cornerRadiusDp
     )
 
     CompositionLocalProvider(LocalArashiTokens provides tokens) {
@@ -201,38 +213,30 @@ fun ArashiBackdrop(
     }
 }
 
-/**
- * 纯净通透的液态玻璃胶囊修饰符（极细高光描边，无厚重金属边框）
- */
 @Composable
 fun Modifier.arashiSurface(
-    shape: Shape = RoundedCornerShape(24.dp),
+    shape: Shape? = null,
     elevation: Dp = 4.dp
 ): Modifier {
     val tokens = LocalArashiTokens.current
+    val resolvedShape = shape ?: RoundedCornerShape(tokens.cornerRadiusDp.dp)
     return if (tokens.style == UiStyleMode.LIQUID_GLASS) {
-        val opacity = (1.08f - tokens.glassTransparency * 0.45f).coerceIn(0.42f, 0.92f)
-        val fillTop = if (tokens.isDark) Color.White.copy(alpha = opacity * 0.14f) else Color.White.copy(alpha = opacity)
-        val fillBottom = if (tokens.isDark) Color.White.copy(alpha = opacity * 0.06f) else Color.White.copy(alpha = (opacity - 0.14f).coerceAtLeast(0.38f))
-        val borderCol = if (tokens.isDark) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.85f)
+        val opacity = (1.10f - tokens.glassTransparency * 0.50f).coerceIn(0.32f, 0.94f)
+        val fillTop = if (tokens.isDark) Color.White.copy(alpha = opacity * 0.15f) else Color.White.copy(alpha = opacity)
+        val fillBottom = if (tokens.isDark) Color.White.copy(alpha = opacity * 0.06f) else Color.White.copy(alpha = (opacity - 0.14f).coerceAtLeast(0.32f))
+        val borderAlpha = (tokens.glassHighlight * (if (tokens.isDark) 0.36f else 0.95f)).coerceIn(0.05f, 0.98f)
+        val borderCol = Color.White.copy(alpha = borderAlpha)
         this
-            .shadow(elevation, shape, ambientColor = Color(0x12000000), spotColor = Color(0x18000000))
-            .clip(shape)
+            .shadow(elevation, resolvedShape, ambientColor = Color(0x12000000), spotColor = Color(0x18000000))
+            .clip(resolvedShape)
             .background(Brush.linearGradient(listOf(fillTop, fillBottom)))
-            .border(0.75.dp, borderCol, shape)
+            .border(0.85.dp, borderCol, resolvedShape)
     } else {
-        this.clip(shape).background(tokens.surfaceCard)
+        this.clip(resolvedShape).background(tokens.surfaceCard)
     }
 }
 
-/**
- * visionOS 播放页悬浮玻璃胶囊（用于视频与音乐播放控制栏）
- */
 fun Modifier.visionGlassCapsule(shape: Shape = RoundedCornerShape(28.dp)): Modifier = this
     .clip(shape)
-    .background(
-        Brush.linearGradient(
-            listOf(Color(0x52161A26), Color(0x38161A26))
-        )
-    )
+    .background(Brush.linearGradient(listOf(Color(0x52161A26), Color(0x38161A26))))
     .border(0.85.dp, Color.White.copy(alpha = 0.32f), shape)

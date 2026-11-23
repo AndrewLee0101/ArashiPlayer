@@ -23,7 +23,7 @@ fun PatternLockGrid(
 
     Canvas(
         modifier = modifier
-            .size(260.dp)
+            .size(250.dp)
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = { offset ->
@@ -51,35 +51,15 @@ fun PatternLockGrid(
     ) {
         val centers = getNodeCenters(size.width, size.height)
         for (i in 0 until selected.size - 1) {
-            drawLine(
-                color = tokens.accent.copy(alpha = 0.85f),
-                start = centers[selected[i]],
-                end = centers[selected[i + 1]],
-                strokeWidth = 8f,
-                cap = StrokeCap.Round
-            )
+            drawLine(tokens.accent.copy(alpha = 0.85f), centers[selected[i]], centers[selected[i + 1]], strokeWidth = 8f, cap = StrokeCap.Round)
         }
         if (selected.isNotEmpty() && currentTouch != null) {
-            drawLine(
-                color = tokens.accent.copy(alpha = 0.45f),
-                start = centers[selected.last()],
-                end = currentTouch!!,
-                strokeWidth = 6f,
-                cap = StrokeCap.Round
-            )
+            drawLine(tokens.accent.copy(alpha = 0.45f), centers[selected.last()], currentTouch!!, strokeWidth = 6f, cap = StrokeCap.Round)
         }
         centers.forEachIndexed { idx, center ->
             val isSelected = idx in selected
-            drawCircle(
-                color = if (isSelected) tokens.accent.copy(alpha = 0.24f) else tokens.textPrimary.copy(alpha = 0.10f),
-                radius = 30f,
-                center = center
-            )
-            drawCircle(
-                color = if (isSelected) tokens.accent else tokens.textPrimary.copy(alpha = 0.45f),
-                radius = if (isSelected) 12f else 8f,
-                center = center
-            )
+            drawCircle(if (isSelected) tokens.accent.copy(alpha = 0.24f) else tokens.textPrimary.copy(alpha = 0.10f), 28f, center)
+            drawCircle(if (isSelected) tokens.accent else tokens.textPrimary.copy(alpha = 0.45f), if (isSelected) 12f else 8f, center)
         }
     }
 }
@@ -88,18 +68,11 @@ private fun getNodeCenters(width: Float, height: Float): List<Offset> {
     val stepX = width / 3f
     val stepY = height / 3f
     val list = mutableListOf<Offset>()
-    for (row in 0..2) {
-        for (col in 0..2) {
-            list.add(Offset(stepX * col + stepX / 2f, stepY * row + stepY / 2f))
-        }
-    }
+    for (row in 0..2) for (col in 0..2) list.add(Offset(stepX * col + stepX / 2f, stepY * row + stepY / 2f))
     return list
 }
 
 private fun findHitNode(touch: Offset, width: Float, height: Float): Int? {
-    val centers = getNodeCenters(width, height)
-    centers.forEachIndexed { idx, c ->
-        if (hypot(touch.x - c.x, touch.y - c.y) <= 44f) return idx
-    }
+    getNodeCenters(width, height).forEachIndexed { idx, c -> if (hypot(touch.x - c.x, touch.y - c.y) <= 44f) return idx }
     return null
 }

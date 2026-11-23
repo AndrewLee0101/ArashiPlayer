@@ -33,9 +33,6 @@ object LrcParser {
         return list.sortedBy { it.first }
     }
 
-    /**
-     * 合并原词 + 外语中文翻译 (tlyric) + 日语罗马音/汉语拼音标音 (romalrc)
-     */
     fun parseMultilingual(
         originalLrc: String?,
         translatedLrc: String? = null,
@@ -50,12 +47,7 @@ object LrcParser {
                 ?.takeIf { abs(it.first - ts) <= 600L }?.second
             val matchedRoma = roma.minByOrNull { abs(it.first - ts) }
                 ?.takeIf { abs(it.first - ts) <= 600L }?.second
-            LyricLine(
-                timestampMs = ts,
-                text = text,
-                translation = matchedTrans,
-                phonetic = matchedRoma
-            )
+            LyricLine(ts, text, matchedTrans, matchedRoma)
         }
     }
 }

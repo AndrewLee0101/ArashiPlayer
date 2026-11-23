@@ -5,6 +5,7 @@ import android.net.Uri
 import java.io.File
 
 enum class VideoLayoutMode { FOLDER_ROW, COLUMN_LIST, GRID }
+enum class MusicPlayMode { ORDER, SINGLE_LOOP, SHUFFLE }
 
 data class LocalVideo(
     val id: Long,
