@@ -17,7 +17,16 @@ import android.widget.TextView
 data class DesktopLyricsConfig(
     val enabled: Boolean = false,
     val fontSizeSp: Float = 19f,
-    val textColorArgb: Int = Color.WHITE
+    val textColorArgb: Int = Color.WHITE,
+    val highlightColorArgb: Int = 0xFF64E8FF.toInt()
+)
+
+val LyricHighlightColorSwatches = listOf(
+    "冰川青" to 0xFF64E8FF.toInt(),
+    "纯白" to Color.WHITE,
+    "暖阳黄" to 0xFFFFE066.toInt(),
+    "樱花粉" to 0xFFFF7EB6.toInt(),
+    "薄荷绿" to 0xFF6EE7B7.toInt()
 )
 
 val DesktopLyricColorSwatches = listOf(
@@ -34,7 +43,8 @@ class DesktopLyricsStore(context: Context) {
     fun load(): DesktopLyricsConfig = DesktopLyricsConfig(
         enabled = prefs.getBoolean("enabled", false),
         fontSizeSp = prefs.getFloat("fontSizeSp", 19f),
-        textColorArgb = prefs.getInt("textColorArgb", Color.WHITE)
+        textColorArgb = prefs.getInt("textColorArgb", Color.WHITE),
+        highlightColorArgb = prefs.getInt("highlightColorArgb", 0xFF64E8FF.toInt())
     )
 
     fun save(config: DesktopLyricsConfig) {
@@ -42,6 +52,7 @@ class DesktopLyricsStore(context: Context) {
             .putBoolean("enabled", config.enabled)
             .putFloat("fontSizeSp", config.fontSizeSp)
             .putInt("textColorArgb", config.textColorArgb)
+            .putInt("highlightColorArgb", config.highlightColorArgb)
             .apply()
     }
 }

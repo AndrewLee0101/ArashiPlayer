@@ -56,6 +56,8 @@ fun AppleMusicPlayerSheet(
     onPrev: () -> Unit,
     onCyclePlayMode: () -> Unit,
     onToggleFavorite: () -> Unit,
+    lyricTextColor: Color = Color.White,
+    lyricHighlightColor: Color = Color(0xFF64E8FF),
     onTagSaved: () -> Unit,
     onClose: () -> Unit
 ) {
@@ -201,7 +203,7 @@ fun AppleMusicPlayerSheet(
                                     }
                                     Text(
                                         text = line.text,
-                                        color = if (active) Color.White else Color.White.copy(alpha = 0.42f),
+                                        color = if (active) lyricHighlightColor else lyricTextColor.copy(alpha = 0.45f),
                                         fontSize = if (active) 22.sp else 17.sp,
                                         fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                                         lineHeight = 30.sp,
@@ -211,7 +213,7 @@ fun AppleMusicPlayerSheet(
                                         Spacer(Modifier.height(3.dp))
                                         Text(
                                             text = line.translation,
-                                            color = if (active) Color.White.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.34f),
+                                            color = if (active) lyricHighlightColor.copy(alpha = 0.86f) else lyricTextColor.copy(alpha = 0.36f),
                                             fontSize = if (active) 15.sp else 13.sp,
                                             textAlign = TextAlign.Center
                                         )
@@ -243,10 +245,10 @@ fun AppleMusicPlayerSheet(
                                 Text(currentLine.phonetic, color = Color(0xFF7BE3FF), fontSize = 12.sp, maxLines = 1, textAlign = TextAlign.Center)
                                 Spacer(Modifier.height(2.dp))
                             }
-                            Text(currentLine.text, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, textAlign = TextAlign.Center)
+                            Text(currentLine.text, color = lyricHighlightColor, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, textAlign = TextAlign.Center)
                             if (showTranslation && !currentLine.translation.isNullOrBlank()) {
                                 Spacer(Modifier.height(3.dp))
-                                Text(currentLine.translation, color = Color.White.copy(alpha = 0.65f), fontSize = 13.sp, maxLines = 1, textAlign = TextAlign.Center)
+                                Text(currentLine.translation, color = lyricTextColor.copy(alpha = 0.72f), fontSize = 13.sp, maxLines = 1, textAlign = TextAlign.Center)
                             }
                         }
                     }

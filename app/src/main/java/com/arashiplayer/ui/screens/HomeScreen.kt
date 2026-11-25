@@ -16,6 +16,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,7 +38,7 @@ import com.arashiplayer.data.*
 import com.arashiplayer.music.OnlineTagMatcher
 import com.arashiplayer.ui.theme.*
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun VideoLibraryScreen(
     videos: List<LocalVideo>,
@@ -54,6 +60,8 @@ fun VideoLibraryScreen(
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var renameTarget by remember { mutableStateOf<LocalVideo?>(null) }
     var pendingDeleteVideos by remember { mutableStateOf<List<LocalVideo>?>(null) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    val refreshScope = rememberCoroutineScope()
 
     val baseVideos = remember(videos, searchQuery, activeFolder) {
         val q = if (searchQuery.isBlank()) videos else videos.filter { it.title.contains(searchQuery, true) }
@@ -438,7 +446,7 @@ private fun VideoListRowItem(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MusicLibraryScreen(
     audios: List<LocalAudio>,
@@ -461,6 +469,8 @@ fun MusicLibraryScreen(
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var renameTarget by remember { mutableStateOf<LocalAudio?>(null) }
     var pendingDeleteAudios by remember { mutableStateOf<List<LocalAudio>?>(null) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    val refreshScope = rememberCoroutineScope()
 
     val filtered = remember(audios, searchQuery) {
         if (searchQuery.isBlank()) audios
@@ -529,6 +539,18 @@ fun MusicLibraryScreen(
                 }
             }
 
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    refreshScope.launch {
+                        isRefreshing = true
+                        onRefresh()
+                        delay(600)
+                        isRefreshing = false
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            ) {
             LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 175.dp)) {
                 items(filtered, key = { "row_${it.id}_${tagVersion}_$favVersion" }) { audio ->
                     val saved = remember(audio.id, tagVersion) { matcher.getSavedTag(audio.id) }
@@ -587,6 +609,7 @@ fun MusicLibraryScreen(
                         )
                     }
                 }
+            }
             }
         }
 

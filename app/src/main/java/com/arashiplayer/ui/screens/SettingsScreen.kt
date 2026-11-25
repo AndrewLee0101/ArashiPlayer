@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.arashiplayer.R
 import com.arashiplayer.data.RecycleBinManager
 import com.arashiplayer.music.DesktopLyricColorSwatches
+import com.arashiplayer.music.LyricHighlightColorSwatches
 import com.arashiplayer.music.DesktopLyricsConfig
 import com.arashiplayer.music.canDrawDesktopLyrics
 import com.arashiplayer.music.openOverlayPermissionSettings
@@ -103,7 +104,7 @@ fun SettingsScreen(
                 Column(modifier = Modifier.fillMaxWidth().arashiSurface().padding(vertical = 4.dp)) {
                     SettingsRow(
                         icon = Icons.Default.Palette,
-                        iconTint = tokens.accent,
+                        iconTint = Color(0xFF348CFF),
                         title = "外观与主题",
                         trailing = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -115,8 +116,8 @@ fun SettingsScreen(
                     )
                     HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
                     SettingsRow(
-                        icon = Icons.Default.Security,
-                        iconTint = tokens.accent,
+                        icon = Icons.Default.Lock,
+                        iconTint = Color(0xFF7B6CF6),
                         title = "隐私解锁设置",
                         trailing = {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -129,7 +130,7 @@ fun SettingsScreen(
                     HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
                     SettingsRow(
                         icon = Icons.Default.DeleteOutline,
-                        iconTint = Color(0xFFFF4D7D),
+                        iconTint = Color(0xFF34C77B),
                         title = "回收站",
                         trailing = {
                             val trashCount = remember(showRecycleBin) { recycleBinManager.listTrashItems().size }
@@ -142,8 +143,8 @@ fun SettingsScreen(
                     )
                     HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
                     SettingsRow(
-                        icon = Icons.Default.Lyrics,
-                        iconTint = Color(0xFF0A84FF),
+                        icon = Icons.Default.MusicNote,
+                        iconTint = Color(0xFFFF9F43),
                         title = "桌面歌词",
                         trailing = {
                             Switch(
@@ -187,7 +188,7 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("字体颜色", color = tokens.textSecondary, fontSize = 13.sp)
+                                Text("文字颜色", color = tokens.textSecondary, fontSize = 13.sp)
                                 DesktopLyricColorSwatches.forEach { (_, argb) ->
                                     val c = Color(argb)
                                     val selected = desktopLyricsConfig.textColorArgb == argb
@@ -205,13 +206,36 @@ fun SettingsScreen(
                                     )
                                 }
                             }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("高亮颜色", color = tokens.textSecondary, fontSize = 13.sp)
+                                LyricHighlightColorSwatches.forEach { (_, argb) ->
+                                    val c = Color(argb)
+                                    val selected = desktopLyricsConfig.highlightColorArgb == argb
+                                    Box(
+                                        modifier = Modifier
+                                            .size(26.dp)
+                                            .clip(CircleShape)
+                                            .background(c)
+                                            .border(
+                                                width = if (selected) 2.5.dp else 1.dp,
+                                                color = if (selected) tokens.accent else tokens.textPrimary.copy(alpha = 0.25f),
+                                                shape = CircleShape
+                                            )
+                                            .clickable { onDesktopLyricsChange(desktopLyricsConfig.copy(highlightColorArgb = argb)) }
+                                    )
+                                }
+                            }
                             Spacer(Modifier.height(4.dp))
                         }
                     }
                     HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
                     SettingsRow(
                         icon = Icons.Default.FolderOpen,
-                        iconTint = tokens.accent,
+                        iconTint = Color(0xFFD9B277),
                         title = "存储与权限",
                         trailing = {
                             val granted = vaultManager.hasAllFilesAccess()
@@ -222,7 +246,7 @@ fun SettingsScreen(
                     HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
                     SettingsRow(
                         icon = Icons.Default.Refresh,
-                        iconTint = tokens.accent,
+                        iconTint = Color(0xFFFF5252),
                         title = "重新扫描媒体",
                         trailing = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.textSecondary) },
                         onClick = onRefreshMedia
@@ -385,10 +409,18 @@ private fun SettingsRow(
 ) {
     val tokens = LocalArashiTokens.current
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 18.dp, vertical = 15.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(21.dp))
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(iconTint),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
+        }
         Spacer(Modifier.width(14.dp))
         Text(title, color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
         trailing()

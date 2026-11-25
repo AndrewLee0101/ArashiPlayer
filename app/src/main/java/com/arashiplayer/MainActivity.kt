@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.FragmentActivity
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
@@ -161,6 +162,42 @@ fun ArashiPlayerApp(
         }
         videoPlayer.addListener(listener)
         onDispose { videoPlayer.removeListener(listener) }
+    }
+
+    fun playAudioWithQueue(target: LocalAudio) {
+        videoPlayer.pause(); isVideoMiniWindow = false; isVideoBgAudio = false
+        val queue = if (audios.any { it.id == target.id }) audios else listOf(target)
+        val startIdx = queue.indexOfFirst { it.id == target.id }.coerceAtLeast(0)
+        val mediaItems = queue.map { a ->
+            val saved = tagMatcher.getSavedTag(a.id)
+            MediaItem.Builder()
+                .setUri(a.uri)
+                .setMediaId(a.id.toString())
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(saved?.title?.ifBlank { a.title } ?: a.title)
+                        .setArtist(saved?.artist?.ifBlank { a.artist } ?: a.artist)
+                        .setAlbumTitle(saved?.album?.ifBlank { a.album } ?: a.album)
+                        .setArtworkUri(saved?.coverUrl?.let { Uri.parse(it) } ?: a.albumArtUri)
+                        .build()
+                )
+                .build()
+        }
+        activeTrack = target
+        musicPlayer.setMediaItems(mediaItems, startIdx, 0L)
+        musicPlayer.prepare()
+        musicPlayer.play()
+    }
+
+    DisposableEffect(musicPlayer, audios) {
+        val listener = object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val id = mediaItem?.mediaId?.toLongOrNull() ?: return
+                audios.firstOrNull { it.id == id }?.let { activeTrack = it }
+            }
+        }
+        musicPlayer.addListener(listener)
+        onDispose { musicPlayer.removeListener(listener) }
     }
 
     LaunchedEffect(showMiniControls, isVideoMiniWindow) {
@@ -289,18 +326,14 @@ fun ArashiPlayerApp(
                 if (audios.isNotEmpty()) {
                     val idx = audios.indexOfFirst { it.id == current.id }
                     val next = if (musicPlayMode == MusicPlayMode.SHUFFLE) audios.random() else audios[(idx + 1) % audios.size]
-                    activeTrack = next
-                    musicPlayer.setMediaItem(MediaItem.fromUri(next.uri))
-                    musicPlayer.prepare(); musicPlayer.play()
+                    playAudioWithQueue(next)
                 }
             },
             onPrev = {
                 if (audios.isNotEmpty()) {
                     val idx = audios.indexOfFirst { it.id == current.id }
                     val prev = audios[(idx - 1 + audios.size) % audios.size]
-                    activeTrack = prev
-                    musicPlayer.setMediaItem(MediaItem.fromUri(prev.uri))
-                    musicPlayer.prepare(); musicPlayer.play()
+                    playAudioWithQueue(prev)
                 }
             },
             onCyclePlayMode = {
@@ -311,6 +344,8 @@ fun ArashiPlayerApp(
                 }
             },
             onToggleFavorite = { favoritesStore.toggleFavorite(current.path); favVersion++ },
+            lyricTextColor = Color(desktopLyricsConfig.textColorArgb),
+            lyricHighlightColor = Color(desktopLyricsConfig.highlightColorArgb),
             onTagSaved = { tagVersion++ },
             onClose = { showFullMusicSheet = false }
         )
@@ -390,10 +425,7 @@ fun ArashiPlayerApp(
                 onToggleSearch = { showSearchBar = !showSearchBar },
                 onRefresh = { refreshAll(); Toast.makeText(context, "已刷新音乐列表", Toast.LENGTH_SHORT).show() },
                 onAudioClick = { audio ->
-                    videoPlayer.pause(); isVideoMiniWindow = false; isVideoBgAudio = false
-                    activeTrack = audio
-                    musicPlayer.setMediaItem(MediaItem.fromUri(audio.uri))
-                    musicPlayer.prepare(); musicPlayer.play()
+                    playAudioWithQueue(audio)
                     showFullMusicSheet = true
                 },
                 onRenameAudio = { a, newName ->
@@ -430,10 +462,7 @@ fun ArashiPlayerApp(
                     isVideoFullScreen = true; isVideoMiniWindow = false; isVideoBgAudio = false
                 },
                 onAudioClick = { audio ->
-                    videoPlayer.pause(); isVideoMiniWindow = false; isVideoBgAudio = false
-                    activeTrack = audio
-                    musicPlayer.setMediaItem(MediaItem.fromUri(audio.uri))
-                    musicPlayer.prepare(); musicPlayer.play()
+                    playAudioWithQueue(audio)
                     showFullMusicSheet = true
                 }
             )
