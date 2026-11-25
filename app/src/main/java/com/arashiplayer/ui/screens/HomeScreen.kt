@@ -52,6 +52,7 @@ fun VideoLibraryScreen(
     var multiSelectMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var renameTarget by remember { mutableStateOf<LocalVideo?>(null) }
+    var pendingDeleteVideos by remember { mutableStateOf<List<LocalVideo>?>(null) }
 
     val baseVideos = remember(videos, searchQuery, activeFolder) {
         val q = if (searchQuery.isBlank()) videos else videos.filter { it.title.contains(searchQuery, true) }
@@ -153,8 +154,7 @@ fun VideoLibraryScreen(
                         })
                         Text("删除", color = Color(0xFFFF2442), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable {
                             val chosen = baseVideos.filter { it.id in selectedIds }
-                            onDeleteVideos(chosen)
-                            multiSelectMode = false; selectedIds = emptySet()
+                            if (chosen.isNotEmpty()) pendingDeleteVideos = chosen
                         })
                     }
                 }
@@ -197,7 +197,7 @@ fun VideoLibraryScreen(
                                             } else onVideoClick(video, folderVideos)
                                         },
                                         onRename = { renameTarget = video },
-                                        onDelete = { onDeleteVideos(listOf(video)) },
+                                        onDelete = { pendingDeleteVideos = listOf(video) },
                                         onToggleFav = { favoritesStore.toggleFavorite(video.path); onFavoriteChanged() },
                                         onEncrypt = { onEncryptVideos(listOf(video)) }
                                     )
@@ -226,7 +226,7 @@ fun VideoLibraryScreen(
                                             } else onVideoClick(video, baseVideos)
                                         },
                                         onRename = { renameTarget = video },
-                                        onDelete = { onDeleteVideos(listOf(video)) },
+                                        onDelete = { pendingDeleteVideos = listOf(video) },
                                         onToggleFav = { favoritesStore.toggleFavorite(video.path); onFavoriteChanged() },
                                         onEncrypt = { onEncryptVideos(listOf(video)) }
                                     )
@@ -249,7 +249,7 @@ fun VideoLibraryScreen(
                                 } else onVideoClick(video, baseVideos)
                             },
                             onRename = { renameTarget = video },
-                            onDelete = { onDeleteVideos(listOf(video)) },
+                            onDelete = { pendingDeleteVideos = listOf(video) },
                             onToggleFav = { favoritesStore.toggleFavorite(video.path); onFavoriteChanged() },
                             onEncrypt = { onEncryptVideos(listOf(video)) }
                         )
@@ -264,6 +264,21 @@ fun VideoLibraryScreen(
                 initialName = v.title.substringBeforeLast('.'),
                 onConfirm = { newName -> onRenameVideo(v, newName); renameTarget = null },
                 onDismiss = { renameTarget = null }
+            )
+        }
+
+        // 删除二次确认对话框
+        pendingDeleteVideos?.let { targets ->
+            ConfirmDeleteDialog(
+                count = targets.size,
+                singleTitle = targets.firstOrNull()?.title,
+                onConfirm = {
+                    onDeleteVideos(targets)
+                    pendingDeleteVideos = null
+                    multiSelectMode = false
+                    selectedIds = emptySet()
+                },
+                onDismiss = { pendingDeleteVideos = null }
             )
         }
     }
@@ -374,9 +389,9 @@ private fun VideoListRowItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .arashiSurface(RoundedCornerShape(18.dp), elevation = 2.dp)
+                .arashiSurface(RoundedCornerShape(22.dp), elevation = 2.dp)
                 .combinedClickable(onClick = onClick, onLongClick = { if (!multiSelectMode) menuExpanded = true })
-                .padding(10.dp),
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (multiSelectMode) {
@@ -436,6 +451,7 @@ fun MusicLibraryScreen(
     var multiSelectMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var renameTarget by remember { mutableStateOf<LocalAudio?>(null) }
+    var pendingDeleteAudios by remember { mutableStateOf<List<LocalAudio>?>(null) }
 
     val filtered = remember(audios, searchQuery) {
         if (searchQuery.isBlank()) audios
@@ -497,8 +513,8 @@ fun MusicLibraryScreen(
                             multiSelectMode = false; selectedIds = emptySet()
                         })
                         Text("删除", color = Color(0xFFFF2442), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable {
-                            onDeleteAudios(filtered.filter { it.id in selectedIds })
-                            multiSelectMode = false; selectedIds = emptySet()
+                            val chosen = filtered.filter { it.id in selectedIds }
+                            if (chosen.isNotEmpty()) pendingDeleteAudios = chosen
                         })
                     }
                 }
@@ -514,7 +530,7 @@ fun MusicLibraryScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .arashiSurface(RoundedCornerShape(18.dp), elevation = 2.dp)
+                                .arashiSurface(RoundedCornerShape(22.dp), elevation = 2.dp)
                                 .combinedClickable(
                                     onClick = {
                                         if (multiSelectMode) {
@@ -523,7 +539,7 @@ fun MusicLibraryScreen(
                                     },
                                     onLongClick = { if (!multiSelectMode) menuExpanded = true }
                                 )
-                                .padding(10.dp),
+                                .padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (multiSelectMode) {
@@ -556,7 +572,7 @@ fun MusicLibraryScreen(
                             isFav = isFav,
                             onDismiss = { menuExpanded = false },
                             onRename = { menuExpanded = false; renameTarget = audio },
-                            onDelete = { menuExpanded = false; onDeleteAudios(listOf(audio)) },
+                            onDelete = { menuExpanded = false; pendingDeleteAudios = listOf(audio) },
                             onToggleFav = { menuExpanded = false; favoritesStore.toggleFavorite(audio.path); onFavoriteChanged() },
                             onEncrypt = { menuExpanded = false; onEncryptAudios(listOf(audio)) }
                         )
@@ -570,6 +586,20 @@ fun MusicLibraryScreen(
                 initialName = a.title,
                 onConfirm = { newName -> onRenameAudio(a, newName); renameTarget = null },
                 onDismiss = { renameTarget = null }
+            )
+        }
+
+        pendingDeleteAudios?.let { targets ->
+            ConfirmDeleteDialog(
+                count = targets.size,
+                singleTitle = targets.firstOrNull()?.title,
+                onConfirm = {
+                    onDeleteAudios(targets)
+                    pendingDeleteAudios = null
+                    multiSelectMode = false
+                    selectedIds = emptySet()
+                },
+                onDismiss = { pendingDeleteAudios = null }
             )
         }
     }
@@ -610,6 +640,33 @@ private fun ItemContextMenu(
             onClick = onEncrypt
         )
     }
+}
+
+@Composable
+private fun ConfirmDeleteDialog(
+    count: Int,
+    singleTitle: String?,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val msg = if (count <= 1 && !singleTitle.isNullOrBlank()) {
+        "确定将「$singleTitle」移入回收站吗？可在「设置 → 回收站」中恢复或彻底清理。"
+    } else {
+        "确定将选中的 $count 项内容移入回收站吗？可在「设置 → 回收站」中恢复或彻底清理。"
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("删除确认", fontWeight = FontWeight.Bold) },
+        text = { Text(msg) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("移入回收站", color = Color(0xFFFF2442), fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
 }
 
 @Composable

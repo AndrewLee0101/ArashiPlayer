@@ -44,6 +44,7 @@ import coil.compose.AsyncImage
 import com.arashiplayer.data.LocalAudio
 import com.arashiplayer.data.LocalImage
 import com.arashiplayer.data.LocalVideo
+import com.arashiplayer.data.formatDuration
 import com.arashiplayer.data.formatFileSize
 import com.arashiplayer.ui.theme.*
 import com.arashiplayer.vault.*
@@ -551,11 +552,12 @@ private fun VaultMediaThumbnail(item: VaultItem) {
         return
     }
 
-    val previewBitmap by produceState<Bitmap?>(initialValue = null, item.encryptedPath) {
+    val previewMeta by produceState<Pair<Bitmap?, Long>>(initialValue = null to 0L, item.encryptedPath) {
         value = withContext(Dispatchers.IO) {
             runCatching {
                 val retriever = MediaMetadataRetriever()
                 retriever.setDataSource(item.encryptedPath)
+                val durMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
                 val bmp = if (item.mediaType == VaultMediaType.VIDEO) {
                     retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                         ?: retriever.frameAtTime
@@ -563,14 +565,16 @@ private fun VaultMediaThumbnail(item: VaultItem) {
                     retriever.embeddedPicture?.let { bytes -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size) }
                 }
                 retriever.release()
-                bmp
-            }.getOrNull()
+                bmp to durMs
+            }.getOrDefault(null to 0L)
         }
     }
+    val previewBitmap = previewMeta.first
+    val durationMs = previewMeta.second
 
     Box(
         modifier = Modifier
-            .width(if (item.mediaType == VaultMediaType.VIDEO) 88.dp else 64.dp)
+            .width(if (item.mediaType == VaultMediaType.VIDEO) 92.dp else 58.dp)
             .height(58.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(tokens.accent.copy(alpha = 0.14f)),
@@ -578,25 +582,37 @@ private fun VaultMediaThumbnail(item: VaultItem) {
     ) {
         if (previewBitmap != null) {
             Image(
-                bitmap = previewBitmap!!.asImageBitmap(),
+                bitmap = previewBitmap.asImageBitmap(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-            if (item.mediaType == VaultMediaType.VIDEO) {
-                Box(
-                    modifier = Modifier.size(26.dp).clip(CircleShape).background(Color(0x88000000)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                }
-            }
         } else {
             Icon(
                 if (item.mediaType == VaultMediaType.VIDEO) Icons.Default.Movie else Icons.Default.MusicNote,
                 contentDescription = null,
                 tint = tokens.accent
             )
+        }
+        if (item.mediaType == VaultMediaType.VIDEO) {
+            Box(
+                modifier = Modifier.size(24.dp).clip(CircleShape).background(Color(0x88000000)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+            }
+            if (durationMs > 0L) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color(0x88000000))
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                ) {
+                    Text(formatDuration(durationMs), color = Color.White, fontSize = 9.sp)
+                }
+            }
         }
     }
 }

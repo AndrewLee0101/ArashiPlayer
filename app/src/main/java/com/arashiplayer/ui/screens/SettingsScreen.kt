@@ -34,18 +34,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arashiplayer.R
+import com.arashiplayer.data.RecycleBinManager
 import com.arashiplayer.ui.theme.*
 import com.arashiplayer.vault.PrivacyVaultManager
 
 private const val AUTHOR_XHS_URL = "https://xhslink.cn/o/8vAvNu748Fw"
 private const val AUTHOR_WECHAT = "Naive_guya"
-private const val APP_VERSION_NAME = "v5.1.0"
+private const val APP_VERSION_NAME = "v6.0.0"
 
 @Composable
 fun SettingsScreen(
     themeState: ArashiThemeState,
     onThemeChange: (ArashiThemeState) -> Unit,
     vaultManager: PrivacyVaultManager,
+    recycleBinManager: RecycleBinManager,
     onRefreshMedia: () -> Unit,
     onOpenHiddenVault: () -> Unit
 ) {
@@ -54,6 +56,7 @@ fun SettingsScreen(
     var showThemeStudio by remember { mutableStateOf(false) }
     var showRewardQr by remember { mutableStateOf(false) }
     var showVaultLockSettings by remember { mutableStateOf(false) }
+    var showRecycleBin by remember { mutableStateOf(false) }
 
     // 连续 3 击版本号开启隐藏隐私空间
     var versionTapCount by remember { mutableIntStateOf(0) }
@@ -65,6 +68,15 @@ fun SettingsScreen(
             themeState = themeState,
             onThemeChange = onThemeChange,
             onBack = { showThemeStudio = false }
+        )
+        return
+    }
+
+    if (showRecycleBin) {
+        RecycleBinScreen(
+            recycleBinManager = recycleBinManager,
+            onRefreshMedia = onRefreshMedia,
+            onBack = { showRecycleBin = false }
         )
         return
     }
@@ -107,6 +119,20 @@ fun SettingsScreen(
                             }
                         },
                         onClick = { showVaultLockSettings = true }
+                    )
+                    HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
+                    SettingsRow(
+                        icon = Icons.Default.DeleteOutline,
+                        iconTint = Color(0xFFFF4D7D),
+                        title = "回收站",
+                        trailing = {
+                            val trashCount = remember(showRecycleBin) { recycleBinManager.listTrashItems().size }
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(if (trashCount > 0) "${trashCount} 项" else "空", color = tokens.textSecondary, fontSize = 12.sp)
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = tokens.textSecondary)
+                            }
+                        },
+                        onClick = { showRecycleBin = true }
                     )
                     HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
                     SettingsRow(

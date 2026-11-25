@@ -5,9 +5,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -66,7 +68,7 @@ fun FavoritesScreen(
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(16.dp))
 
         if (subTab == 0) {
             if (favVideos.isEmpty()) {
@@ -74,26 +76,54 @@ fun FavoritesScreen(
                     Text("空", color = tokens.textSecondary)
                 }
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 175.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 175.dp)) {
                     items(favVideos, key = { it.id }) { v ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .arashiSurface(RoundedCornerShape(18.dp), elevation = 2.dp)
+                                .arashiSurface(RoundedCornerShape(22.dp))
                                 .clickable { onVideoClick(v, favVideos) }
-                                .padding(10.dp),
+                                .padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            AsyncImage(
-                                model = v.uri,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.width(100.dp).height(60.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF1A202E))
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(92.dp)
+                                    .height(58.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color(0xFF1A202E)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AsyncImage(
+                                    model = v.uri,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                Box(
+                                    modifier = Modifier.size(24.dp).clip(CircleShape).background(Color(0x88000000)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                }
+                                if (v.durationMs > 0L) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(4.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color(0x88000000))
+                                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                                    ) {
+                                        Text(formatDuration(v.durationMs), color = Color.White, fontSize = 9.sp)
+                                    }
+                                }
+                            }
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(v.title, color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-                                Text("${formatDuration(v.durationMs)} · ${formatFileSize(v.sizeBytes)}", color = tokens.textSecondary, fontSize = 11.sp)
+                                Spacer(Modifier.height(3.dp))
+                                Text(formatFileSize(v.sizeBytes), color = tokens.textSecondary, fontSize = 12.sp)
                             }
                             IconButton(onClick = { onToggleFav(v.path) }) {
                                 Icon(Icons.Default.Favorite, contentDescription = null, tint = Color(0xFFFF4D7D))
@@ -108,26 +138,27 @@ fun FavoritesScreen(
                     Text("空", color = tokens.textSecondary)
                 }
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 175.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 175.dp)) {
                     items(favAudios, key = { "${it.id}_$tagVersion" }) { a ->
                         val saved = remember(a.id, tagVersion) { matcher.getSavedTag(a.id) }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .arashiSurface(RoundedCornerShape(18.dp), elevation = 2.dp)
+                                .arashiSurface(RoundedCornerShape(22.dp))
                                 .clickable { onAudioClick(a) }
-                                .padding(10.dp),
+                                .padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AsyncImage(
                                 model = saved?.coverUrl ?: a.albumArtUri,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(tokens.surfaceCard)
+                                modifier = Modifier.size(58.dp).clip(RoundedCornerShape(14.dp)).background(tokens.surfaceCard)
                             )
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(saved?.title?.ifBlank { a.title } ?: a.title, color = tokens.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                                Spacer(Modifier.height(3.dp))
                                 Text(saved?.artist?.ifBlank { a.artist } ?: a.artist, color = tokens.textSecondary, fontSize = 12.sp, maxLines = 1)
                             }
                             IconButton(onClick = { onToggleFav(a.path) }) {

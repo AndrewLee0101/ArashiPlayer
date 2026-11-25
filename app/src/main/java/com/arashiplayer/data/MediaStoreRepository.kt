@@ -38,7 +38,7 @@ class MediaStoreRepository(private val context: Context) {
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
                     val path = cursor.getString(dataCol) ?: ""
-                    if (path.endsWith(".arashi_enc") || !File(path).exists()) continue
+                    if (path.endsWith(".arashi_enc") || path.contains("/.arashi_trash/") || !File(path).exists()) continue
                     val uri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
                     result.add(
                         LocalVideo(
@@ -86,7 +86,7 @@ class MediaStoreRepository(private val context: Context) {
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
                     val path = cursor.getString(dataCol) ?: ""
-                    if (path.endsWith(".arashi_enc") || !File(path).exists()) continue
+                    if (path.endsWith(".arashi_enc") || path.contains("/.arashi_trash/") || !File(path).exists()) continue
                     val albumId = cursor.getLong(albumIdCol)
                     val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
                     val artUri = ContentUris.withAppendedId(
@@ -132,7 +132,7 @@ class MediaStoreRepository(private val context: Context) {
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
                     val path = cursor.getString(dataCol) ?: ""
-                    if (path.endsWith(".arashi_enc") || !File(path).exists()) continue
+                    if (path.endsWith(".arashi_enc") || path.contains("/.arashi_trash/") || !File(path).exists()) continue
                     val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
                     result.add(
                         LocalImage(

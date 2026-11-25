@@ -1,6 +1,7 @@
 package com.arashiplayer
 
 import android.Manifest
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -83,6 +84,79 @@ class MainActivity : FragmentActivity() {
                 )
             }
         }
+        if (showWelcomeDialog) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x77000000))
+                    .clickable { showWelcomeDialog = false },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 28.dp)
+                        .arashiSurface(RoundedCornerShape(28.dp), elevation = 10.dp)
+                        .clickable(enabled = false) {}
+                        .padding(22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(tokens.accent.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Group, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(28.dp))
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Text("交流群", color = tokens.textPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "欢迎加入交流群获取版本更新，提出宝贵意见！",
+                        color = tokens.textSecondary,
+                        fontSize = 14.sp,
+                        lineHeight = 21.sp
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(tokens.textPrimary.copy(alpha = 0.08f))
+                                .clickable { showWelcomeDialog = false }
+                                .padding(vertical = 11.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("取消", color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(tokens.accent)
+                                .clickable {
+                                    showWelcomeDialog = false
+                                    runCatching {
+                                        context.startActivity(
+                                            Intent(Intent.ACTION_VIEW, Uri.parse("https://qm.qq.com/q/GtxBLm2e8E"))
+                                        )
+                                    }
+                                }
+                                .padding(vertical = 11.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("确认", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -100,6 +174,7 @@ fun ArashiPlayerApp(
     val vaultManager = remember { PrivacyVaultManager(context) }
     val tagMatcher = remember { OnlineTagMatcher(context) }
     val favoritesStore = remember { FavoritesStore(context) }
+    val recycleBinManager = remember { RecycleBinManager(context) }
 
     val videoPlayer = remember { ExoPlayer.Builder(context).build() }
     val musicPlayer = remember { ExoPlayer.Builder(context).build() }
@@ -116,6 +191,7 @@ fun ArashiPlayerApp(
     var tagVersion by remember { mutableIntStateOf(0) }
     var favVersion by remember { mutableIntStateOf(0) }
     var showSearchBar by remember { mutableStateOf(false) }
+    var showWelcomeDialog by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
 
     var videoPlaylist by remember { mutableStateOf<List<Pair<Uri, String>>>(emptyList()) }
@@ -301,7 +377,14 @@ fun ArashiPlayerApp(
                 },
                 onDeleteVideos = { list ->
                     if (!vaultManager.hasAllFilesAccess()) openAllFilesPermission(context)
-                    else { list.forEach { repo.deleteMediaFile(it.path, it.uri) }; refreshAll() }
+                    else {
+                        var moved = 0
+                        list.forEach { v ->
+                            if (recycleBinManager.moveToTrash(v.path, v.uri, v.title, TrashMediaType.VIDEO, v.durationMs, v.sizeBytes).isSuccess) moved++
+                        }
+                        refreshAll()
+                        if (moved > 0) Toast.makeText(context, "已移入回收站（${moved}项），可在设置中恢复", Toast.LENGTH_SHORT).show()
+                    }
                 },
                 onEncryptVideos = { list ->
                     if (!vaultManager.hasAllFilesAccess()) openAllFilesPermission(context)
@@ -329,7 +412,14 @@ fun ArashiPlayerApp(
                 },
                 onDeleteAudios = { list ->
                     if (!vaultManager.hasAllFilesAccess()) openAllFilesPermission(context)
-                    else { list.forEach { repo.deleteMediaFile(it.path, it.uri) }; refreshAll() }
+                    else {
+                        var moved = 0
+                        list.forEach { a ->
+                            if (recycleBinManager.moveToTrash(a.path, a.uri, a.title, TrashMediaType.AUDIO, a.durationMs, java.io.File(a.path).length()).isSuccess) moved++
+                        }
+                        refreshAll()
+                        if (moved > 0) Toast.makeText(context, "已移入回收站（${moved}项），可在设置中恢复", Toast.LENGTH_SHORT).show()
+                    }
                 },
                 onEncryptAudios = { list ->
                     if (!vaultManager.hasAllFilesAccess()) openAllFilesPermission(context)
@@ -361,6 +451,7 @@ fun ArashiPlayerApp(
                 themeState = themeState,
                 onThemeChange = onThemeChange,
                 vaultManager = vaultManager,
+                recycleBinManager = recycleBinManager,
                 onRefreshMedia = { refreshAll() },
                 onOpenHiddenVault = { showHiddenVault = true }
             )
