@@ -72,7 +72,10 @@ fun openOverlayPermissionSettings(context: Context) {
     }
 }
 
-class DesktopLyricsOverlayController(private val context: Context) {
+class DesktopLyricsOverlayController(
+    private val context: Context,
+    private val onCloseRequested: () -> Unit = {}
+) {
     private val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var container: LinearLayout? = null
     private var mainLineView: TextView? = null
@@ -113,8 +116,24 @@ class DesktopLyricsOverlayController(private val context: Context) {
         val box = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(28, 12, 28, 12)
+            setPadding(24, 8, 24, 10)
         }
+        val topRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+        }
+        val closeBtn = TextView(context).apply {
+            text = "✕"
+            setTextColor(Color.argb(210, 255, 255, 255))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(16, 4, 8, 4)
+            setShadowLayer(6f, 0f, 1f, Color.argb(180, 0, 0, 0))
+            setOnClickListener {
+                hide()
+                onCloseRequested()
+            }
+        }
+        topRow.addView(closeBtn)
         val mainTv = TextView(context).apply {
             gravity = Gravity.CENTER
             setShadowLayer(8f, 0f, 2f, Color.argb(185, 0, 0, 0))
@@ -124,6 +143,7 @@ class DesktopLyricsOverlayController(private val context: Context) {
             gravity = Gravity.CENTER
             setShadowLayer(6f, 0f, 2f, Color.argb(175, 0, 0, 0))
         }
+        box.addView(topRow)
         box.addView(mainTv)
         box.addView(transTv)
 

@@ -176,6 +176,18 @@ fun VideoLibraryScreen(
                 }
             }
 
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    refreshScope.launch {
+                        isRefreshing = true
+                        onRefresh()
+                        delay(600)
+                        isRefreshing = false
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 175.dp)
@@ -271,6 +283,7 @@ fun VideoLibraryScreen(
                         )
                     }
                 }
+            }
             }
         }
 

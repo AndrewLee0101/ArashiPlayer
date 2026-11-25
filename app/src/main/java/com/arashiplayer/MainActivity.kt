@@ -112,7 +112,12 @@ fun ArashiPlayerApp(
     val recycleBinManager = remember { RecycleBinManager(context) }
     val desktopLyricsStore = remember { DesktopLyricsStore(context) }
     var desktopLyricsConfig by remember { mutableStateOf(desktopLyricsStore.load()) }
-    val desktopOverlay = remember { DesktopLyricsOverlayController(context) }
+    val desktopOverlay = remember {
+        DesktopLyricsOverlayController(context) {
+            desktopLyricsConfig = desktopLyricsConfig.copy(enabled = false)
+            desktopLyricsStore.save(desktopLyricsConfig)
+        }
+    }
 
     val videoPlayer = remember { ExoPlayer.Builder(context).build() }
     val musicPlayer = remember { ExoPlayer.Builder(context).build() }
@@ -151,6 +156,13 @@ fun ArashiPlayerApp(
     var videoAspectRatio by remember { mutableFloatStateOf(16f / 9f) }
     var showMiniControls by remember { mutableStateOf(false) }
     var isIslandExpanded by remember { mutableStateOf(false) }
+
+    var activeTrack by remember { mutableStateOf<LocalAudio?>(null) }
+    var isMusicPlaying by remember { mutableStateOf(false) }
+    var musicPlayMode by remember { mutableStateOf(MusicPlayMode.ORDER) }
+    var musicPosMs by remember { mutableLongStateOf(0L) }
+    var musicDurMs by remember { mutableLongStateOf(0L) }
+    var showFullMusicSheet by remember { mutableStateOf(false) }
 
     DisposableEffect(videoPlayer) {
         val listener = object : Player.Listener {
@@ -206,13 +218,6 @@ fun ArashiPlayerApp(
             showMiniControls = false
         }
     }
-
-    var activeTrack by remember { mutableStateOf<LocalAudio?>(null) }
-    var isMusicPlaying by remember { mutableStateOf(false) }
-    var musicPlayMode by remember { mutableStateOf(MusicPlayMode.ORDER) }
-    var musicPosMs by remember { mutableLongStateOf(0L) }
-    var musicDurMs by remember { mutableLongStateOf(0L) }
-    var showFullMusicSheet by remember { mutableStateOf(false) }
 
     var lastBackPressMs by remember { mutableLongStateOf(0L) }
 
