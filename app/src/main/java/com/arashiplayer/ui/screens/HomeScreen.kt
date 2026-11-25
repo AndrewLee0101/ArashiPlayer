@@ -41,6 +41,7 @@ fun VideoLibraryScreen(
     favVersion: Int,
     onFavoriteChanged: () -> Unit,
     onToggleSearch: () -> Unit,
+    onRefresh: () -> Unit,
     onVideoClick: (LocalVideo, List<LocalVideo>) -> Unit,
     onRenameVideo: (LocalVideo, String) -> Unit,
     onDeleteVideos: (List<LocalVideo>) -> Unit,
@@ -124,6 +125,13 @@ fun VideoLibraryScreen(
                     Icon(icon, contentDescription = null, tint = tokens.textPrimary)
                 }
 
+                IconButton(onClick = onRefresh) {
+                    Icon(Icons.Default.Refresh, contentDescription = "刷新", tint = tokens.textPrimary)
+                }
+
+                IconButton(onClick = onRefresh) {
+                    Icon(Icons.Default.Refresh, contentDescription = "刷新", tint = tokens.textPrimary)
+                }
                 IconButton(onClick = onToggleSearch) {
                     Icon(Icons.Default.Search, contentDescription = null, tint = tokens.textPrimary)
                 }
@@ -440,6 +448,7 @@ fun MusicLibraryScreen(
     favVersion: Int,
     onFavoriteChanged: () -> Unit,
     onToggleSearch: () -> Unit,
+    onRefresh: () -> Unit,
     onAudioClick: (LocalAudio) -> Unit,
     onRenameAudio: (LocalAudio, String) -> Unit,
     onDeleteAudios: (List<LocalAudio>) -> Unit,

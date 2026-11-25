@@ -4,7 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -39,6 +41,7 @@ import kotlinx.coroutines.launch
  * - 封面下方自带双行歌词预览 + 音（标音）/ 译（外语翻译）开关
  * - 底部液态玻璃控制胶囊含播放模式（顺序/单曲/随机）、上一首、播放/暂停、下一首、喜欢爱心
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppleMusicPlayerSheet(
     track: LocalAudio,
@@ -179,7 +182,12 @@ fun AppleMusicPlayerSheet(
                             itemsIndexed(lyrics) { idx, line ->
                                 val active = idx == activeLyricIndex
                                 Column(
-                                    modifier = Modifier.fillMaxWidth().clickable { onSeekTo(line.timestampMs) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .combinedClickable(
+                                            onClick = { showFullLyrics = false },
+                                            onLongClick = { onSeekTo(line.timestampMs) }
+                                        ),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     if (showPhonetics && !line.phonetic.isNullOrBlank()) {

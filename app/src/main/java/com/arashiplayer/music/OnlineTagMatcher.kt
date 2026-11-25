@@ -8,16 +8,13 @@ import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
 enum class MusicTagSource(val label: String) {
     NETEASE("网易云"),
-    QQ("QQ音乐"),
-    KUGOU("酷狗音乐"),
-    ITUNES("iTunes")
+    QQ("QQ音乐")
 }
 
 class OnlineTagMatcher(private val context: Context) {
@@ -75,8 +72,6 @@ class OnlineTagMatcher(private val context: Context) {
         when (source) {
             MusicTagSource.NETEASE -> searchNetEase(cleanKeyword)
             MusicTagSource.QQ -> searchQQMusic(cleanKeyword)
-            MusicTagSource.KUGOU -> searchKugou(cleanKeyword)
-            MusicTagSource.ITUNES -> searchItunes(cleanKeyword)
         }
     }
 
@@ -99,12 +94,6 @@ class OnlineTagMatcher(private val context: Context) {
                         syncedLyrics = pair.first,
                         translatedLyrics = pair.second
                     )
-                }
-            }
-            MusicTagSource.KUGOU.label -> {
-                val lrc = fetchKugouLyrics(candidate.title, candidate.songId)
-                if (!lrc.isNullOrBlank()) {
-                    return@withContext candidate.copy(syncedLyrics = lrc)
                 }
             }
         }
@@ -169,11 +158,13 @@ class OnlineTagMatcher(private val context: Context) {
             val req = Request.Builder()
                 .url("https://c.y.qq.com/soso/fcgi-bin/client_search_cp?p=1&n=8&w=$encoded&format=json")
                 .header("Referer", "https://y.qq.com/")
+                .header("Origin", "https://y.qq.com")
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
                 .build()
             client.newCall(req).execute().use { resp ->
                 if (resp.isSuccessful) {
-                    val list = JSONObject(resp.body?.string().orEmpty())
+                    val bodyStr = stripJsonp(resp.body?.string().orEmpty())
+                    val list = JSONObject(bodyStr)
                         .optJSONObject("data")?.optJSONObject("song")?.optJSONArray("list") ?: return@use
                     for (i in 0 until list.length()) {
                         val s = list.getJSONObject(i)
@@ -195,113 +186,68 @@ class OnlineTagMatcher(private val context: Context) {
     private fun fetchQQMusicLyrics(songMid: String): Pair<String?, String?> {
         return runCatching {
             val req = Request.Builder()
-                .url("https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=$songMid&format=json&nobase64=1")
+                .url("https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?songmid=$songMid&g_tk=5381&format=json&inCharset=utf8&outCharset=utf-8&nobase64=1")
                 .header("Referer", "https://y.qq.com/")
+                .header("Origin", "https://y.qq.com")
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
                 .build()
             client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@use Pair(null, null)
-                val root = JSONObject(resp.body?.string().orEmpty())
-                val orig = root.optString("lyric").ifBlank { null }
-                val trans = root.optString("trans").ifBlank { null }
+                val jsonStr = stripJsonp(resp.body?.string().orEmpty())
+                val root = JSONObject(jsonStr)
+                val orig = decodeQqLyricField(root.optString("lyric"))
+                val trans = decodeQqLyricField(root.optString("trans"))
                 Pair(orig, trans)
             }
         }.getOrDefault(Pair(null, null))
     }
 
-    private fun searchKugou(keyword: String): List<OnlineTagResult> {
-        val results = mutableListOf<OnlineTagResult>()
-        val encoded = URLEncoder.encode(keyword, "UTF-8")
-        runCatching {
+    private fun stripJsonp(raw: String): String {
+        val trimmed = raw.trim()
+        val firstBrace = trimmed.indexOf('{')
+        val lastBrace = trimmed.lastIndexOf('}')
+        return if (firstBrace >= 0 && lastBrace > firstBrace) {
+            trimmed.substring(firstBrace, lastBrace + 1)
+        } else trimmed
+    }
+
+    private fun decodeQqLyricField(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        var text = raw.trim()
+        if (!text.contains("[0")) {
+            val decoded = runCatching {
+                String(Base64.decode(text, Base64.DEFAULT), Charsets.UTF_8)
+            }.getOrNull()
+            if (!decoded.isNullOrBlank() && decoded.contains("[")) {
+                text = decoded
+            }
+        }
+        text = text
+            .replace("&apos;", "'")
+            .replace("&#39;", "'")
+            .replace("&quot;", "\"")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&#10;", "\n")
+            .replace("\r\n", "\n")
+            .trim()
+        return text.ifBlank { null }
+    }
+
+    private fun fetchLrclib(query: String): String? {
+        return runCatching {
+            val encoded = URLEncoder.encode(query, "UTF-8")
             val req = Request.Builder()
-                .url("http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword=$encoded&page=1&pagesize=8")
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
+                .url("https://lrclib.net/api/search?q=$encoded")
+                .header("User-Agent", "ArashiPlayer/6.0")
                 .build()
             client.newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) {
-                    val info = JSONObject(resp.body?.string().orEmpty())
-                        .optJSONObject("data")?.optJSONArray("info") ?: return@use
-                    for (i in 0 until info.length()) {
-                        val s = info.getJSONObject(i)
-                        val hash = s.optString("hash")
-                        val name = s.optString("songname")
-                        val artist = s.optString("singername")
-                        val album = s.optString("album_name")
-                        results.add(OnlineTagResult(hash, name, artist, album, null, null, source = MusicTagSource.KUGOU.label))
-                    }
-                }
-            }
-        }
-        return results
-    }
-
-    private fun fetchKugouLyrics(keyword: String, hash: String): String? {
-        return runCatching {
-            val encoded = URLEncoder.encode(keyword, "UTF-8")
-            val searchReq = Request.Builder()
-                .url("http://krcs.kugou.com/search?ver=1&man=yes&client=mobi&keyword=$encoded&hash=$hash")
-                .build()
-            var id = ""
-            var accesskey = ""
-            client.newCall(searchReq).execute().use { resp ->
-                if (!resp.isSuccessful) return@use
-                val arr = JSONObject(resp.body?.string().orEmpty()).optJSONArray("candidates") ?: return@use
+                if (!resp.isSuccessful) return@use null
+                val arr = org.json.JSONArray(resp.body?.string().orEmpty())
                 if (arr.length() > 0) {
-                    val first = arr.getJSONObject(0)
-                    id = first.optString("id")
-                    accesskey = first.optString("accesskey")
-                }
-            }
-            if (id.isBlank() || accesskey.isBlank()) return@runCatching null
-            val dlReq = Request.Builder()
-                .url("http://krcs.kugou.com/download?ver=1&client=pc&id=$id&accesskey=$accesskey&fmt=lrc&charset=utf8")
-                .build()
-            client.newCall(dlReq).execute().use { resp ->
-                if (!resp.isSuccessful) return@use null
-                val b64 = JSONObject(resp.body?.string().orEmpty()).optString("content")
-                if (b64.isBlank()) null else String(Base64.decode(b64, Base64.DEFAULT), Charsets.UTF_8)
-            }
-        }.getOrNull()
-    }
-
-    private fun searchItunes(keyword: String): List<OnlineTagResult> {
-        val results = mutableListOf<OnlineTagResult>()
-        val encoded = URLEncoder.encode(keyword, "UTF-8")
-        runCatching {
-            val req = Request.Builder().url("https://itunes.apple.com/search?term=$encoded&media=music&limit=6").build()
-            client.newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) {
-                    val arr = JSONObject(resp.body?.string().orEmpty()).optJSONArray("results") ?: return@use
-                    for (i in 0 until arr.length()) {
-                        val item = arr.getJSONObject(i)
-                        results.add(
-                            OnlineTagResult(
-                                songId = item.optLong("trackId").toString(),
-                                title = item.optString("trackName"),
-                                artist = item.optString("artistName"),
-                                album = item.optString("collectionName"),
-                                coverUrl = item.optString("artworkUrl100").replace("100x100bb", "600x600bb").ifBlank { null },
-                                syncedLyrics = null,
-                                source = MusicTagSource.ITUNES.label
-                            )
-                        )
-                    }
-                }
-            }
-        }
-        return results
-    }
-
-    private fun fetchLrclib(keyword: String): String? {
-        val encoded = URLEncoder.encode(keyword.trim(), "UTF-8")
-        return runCatching {
-            val req = Request.Builder().url("https://lrclib.net/api/search?q=$encoded").header("User-Agent", "ArashiPlayer/5.1").build()
-            client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return@use null
-                val arr = JSONArray(resp.body?.string().orEmpty())
-                if (arr.length() == 0) return@use null
-                val first = arr.getJSONObject(0)
-                first.optString("syncedLyrics").ifBlank { first.optString("plainLyrics") }.ifBlank { null }
+                    arr.getJSONObject(0).optString("syncedLyrics").ifBlank { null }
+                } else null
             }
         }.getOrNull()
     }

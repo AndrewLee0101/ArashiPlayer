@@ -4,9 +4,9 @@ import com.arashiplayer.data.LyricLine
 import kotlin.math.abs
 
 object LrcParser {
-    private val lineRegex = Regex("""\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?](.*)""")
+    private val lineRegex = Regex("""\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?](.*)""")
 
-    private fun parseRaw(lrcContent: String?): List<Pair<Long, String>> {
+    private fun parseRaw(lrcContent: String?, filterPlaceholder: Boolean = false): List<Pair<Long, String>> {
         if (lrcContent.isNullOrBlank()) return emptyList()
         val list = mutableListOf<Pair<Long, String>>()
         lrcContent.lineSequence().forEach { raw ->
@@ -14,7 +14,7 @@ object LrcParser {
             val matches = lineRegex.findAll(trimmed).toList()
             if (matches.isNotEmpty()) {
                 val text = trimmed.substringAfterLast(']').trim()
-                if (text.isNotEmpty()) {
+                if (text.isNotEmpty() && (!filterPlaceholder || text != "//")) {
                     matches.forEach { m ->
                         val min = m.groupValues[1].toLongOrNull() ?: 0L
                         val sec = m.groupValues[2].toLongOrNull() ?: 0L
@@ -22,7 +22,7 @@ object LrcParser {
                         val ms = when (msStr.length) {
                             1 -> (msStr.toLongOrNull() ?: 0L) * 100
                             2 -> (msStr.toLongOrNull() ?: 0L) * 10
-                            3 -> msStr.toLongOrNull() ?: 0L
+                            3 -> (msStr.toLongOrNull() ?: 0L)
                             else -> 0L
                         }
                         list.add((min * 60_000 + sec * 1_000 + ms) to text)
@@ -39,14 +39,14 @@ object LrcParser {
         phoneticLrc: String? = null
     ): List<LyricLine> {
         val orig = parseRaw(originalLrc)
-        val trans = parseRaw(translatedLrc)
-        val roma = parseRaw(phoneticLrc)
+        val trans = parseRaw(translatedLrc, filterPlaceholder = true)
+        val roma = parseRaw(phoneticLrc, filterPlaceholder = true)
 
         return orig.map { (ts, text) ->
             val matchedTrans = trans.minByOrNull { abs(it.first - ts) }
-                ?.takeIf { abs(it.first - ts) <= 600L }?.second
+                ?.takeIf { abs(it.first - ts) <= 1200L }?.second
             val matchedRoma = roma.minByOrNull { abs(it.first - ts) }
-                ?.takeIf { abs(it.first - ts) <= 600L }?.second
+                ?.takeIf { abs(it.first - ts) <= 1200L }?.second
             LyricLine(ts, text, matchedTrans, matchedRoma)
         }
     }

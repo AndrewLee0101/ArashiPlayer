@@ -35,6 +35,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arashiplayer.R
 import com.arashiplayer.data.RecycleBinManager
+import com.arashiplayer.music.DesktopLyricColorSwatches
+import com.arashiplayer.music.DesktopLyricsConfig
+import com.arashiplayer.music.canDrawDesktopLyrics
+import com.arashiplayer.music.openOverlayPermissionSettings
 import com.arashiplayer.ui.theme.*
 import com.arashiplayer.vault.PrivacyVaultManager
 
@@ -48,6 +52,8 @@ fun SettingsScreen(
     onThemeChange: (ArashiThemeState) -> Unit,
     vaultManager: PrivacyVaultManager,
     recycleBinManager: RecycleBinManager,
+    desktopLyricsConfig: DesktopLyricsConfig,
+    onDesktopLyricsChange: (DesktopLyricsConfig) -> Unit,
     onRefreshMedia: () -> Unit,
     onOpenHiddenVault: () -> Unit
 ) {
@@ -134,6 +140,74 @@ fun SettingsScreen(
                         },
                         onClick = { showRecycleBin = true }
                     )
+                    HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
+                    SettingsRow(
+                        icon = Icons.Default.Lyrics,
+                        iconTint = Color(0xFF0A84FF),
+                        title = "桌面歌词",
+                        trailing = {
+                            Switch(
+                                checked = desktopLyricsConfig.enabled,
+                                onCheckedChange = { checked ->
+                                    if (checked && !canDrawDesktopLyrics(context)) {
+                                        Toast.makeText(context, "请开启悬浮窗权限以显示桌面歌词", Toast.LENGTH_SHORT).show()
+                                        openOverlayPermissionSettings(context)
+                                    }
+                                    onDesktopLyricsChange(desktopLyricsConfig.copy(enabled = checked))
+                                }
+                            )
+                        },
+                        onClick = {
+                            val next = !desktopLyricsConfig.enabled
+                            if (next && !canDrawDesktopLyrics(context)) {
+                                Toast.makeText(context, "请开启悬浮窗权限以显示桌面歌词", Toast.LENGTH_SHORT).show()
+                                openOverlayPermissionSettings(context)
+                            }
+                            onDesktopLyricsChange(desktopLyricsConfig.copy(enabled = next))
+                        }
+                    )
+                    if (desktopLyricsConfig.enabled) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 18.dp, vertical = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("文字大小", color = tokens.textSecondary, fontSize = 13.sp)
+                                Text("${desktopLyricsConfig.fontSizeSp.toInt()} sp", color = tokens.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            }
+                            Slider(
+                                value = desktopLyricsConfig.fontSizeSp,
+                                onValueChange = { onDesktopLyricsChange(desktopLyricsConfig.copy(fontSizeSp = it)) },
+                                valueRange = 14f..30f
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("字体颜色", color = tokens.textSecondary, fontSize = 13.sp)
+                                DesktopLyricColorSwatches.forEach { (_, argb) ->
+                                    val c = Color(argb)
+                                    val selected = desktopLyricsConfig.textColorArgb == argb
+                                    Box(
+                                        modifier = Modifier
+                                            .size(26.dp)
+                                            .clip(CircleShape)
+                                            .background(c)
+                                            .border(
+                                                width = if (selected) 2.5.dp else 1.dp,
+                                                color = if (selected) tokens.accent else tokens.textPrimary.copy(alpha = 0.25f),
+                                                shape = CircleShape
+                                            )
+                                            .clickable { onDesktopLyricsChange(desktopLyricsConfig.copy(textColorArgb = argb)) }
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                        }
+                    }
                     HorizontalDivider(color = tokens.textPrimary.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
                     SettingsRow(
                         icon = Icons.Default.FolderOpen,

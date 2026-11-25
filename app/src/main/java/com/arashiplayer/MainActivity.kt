@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,8 +39,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.fragment.app.FragmentActivity
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import coil.Coil
 import coil.ImageLoader
@@ -47,6 +50,10 @@ import coil.compose.AsyncImage
 import coil.decode.VideoFrameDecoder
 import com.arashiplayer.data.*
 import com.arashiplayer.music.AppleMusicPlayerSheet
+import com.arashiplayer.music.ArashiMediaNotifier
+import com.arashiplayer.music.DesktopLyricsOverlayController
+import com.arashiplayer.music.DesktopLyricsStore
+import com.arashiplayer.music.LrcParser
 import com.arashiplayer.music.OnlineTagMatcher
 import com.arashiplayer.ui.screens.*
 import com.arashiplayer.ui.theme.*
@@ -102,12 +109,21 @@ fun ArashiPlayerApp(
     val tagMatcher = remember { OnlineTagMatcher(context) }
     val favoritesStore = remember { FavoritesStore(context) }
     val recycleBinManager = remember { RecycleBinManager(context) }
+    val desktopLyricsStore = remember { DesktopLyricsStore(context) }
+    var desktopLyricsConfig by remember { mutableStateOf(desktopLyricsStore.load()) }
+    val desktopOverlay = remember { DesktopLyricsOverlayController(context) }
 
     val videoPlayer = remember { ExoPlayer.Builder(context).build() }
     val musicPlayer = remember { ExoPlayer.Builder(context).build() }
+    val mediaNotifier = remember { ArashiMediaNotifier(context, musicPlayer) }
 
     DisposableEffect(Unit) {
-        onDispose { videoPlayer.release(); musicPlayer.release() }
+        onDispose {
+            desktopOverlay.hide()
+            mediaNotifier.release()
+            videoPlayer.release()
+            musicPlayer.release()
+        }
     }
 
     var videos by remember { mutableStateOf<List<LocalVideo>>(emptyList()) }
@@ -128,9 +144,31 @@ fun ArashiPlayerApp(
     var isVideoBgAudio by remember { mutableStateOf(false) }
     var isVideoPlaying by remember { mutableStateOf(false) }
 
-    var miniOffsetX by remember { mutableFloatStateOf(300f) }
-    var miniOffsetY by remember { mutableFloatStateOf(900f) }
-    var miniWidthDp by remember { mutableFloatStateOf(210f) }
+    var miniOffsetX by remember { mutableFloatStateOf(360f) }
+    var miniOffsetY by remember { mutableFloatStateOf(860f) }
+    var miniWidthDp by remember { mutableFloatStateOf(180f) }
+    var videoAspectRatio by remember { mutableFloatStateOf(16f / 9f) }
+    var showMiniControls by remember { mutableStateOf(false) }
+    var isIslandExpanded by remember { mutableStateOf(false) }
+
+    DisposableEffect(videoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    videoAspectRatio = videoSize.width.toFloat() / videoSize.height.toFloat()
+                }
+            }
+        }
+        videoPlayer.addListener(listener)
+        onDispose { videoPlayer.removeListener(listener) }
+    }
+
+    LaunchedEffect(showMiniControls, isVideoMiniWindow) {
+        if (showMiniControls && isVideoMiniWindow) {
+            delay(3000)
+            showMiniControls = false
+        }
+    }
 
     var activeTrack by remember { mutableStateOf<LocalAudio?>(null) }
     var isMusicPlaying by remember { mutableStateOf(false) }
@@ -155,7 +193,12 @@ fun ArashiPlayerApp(
 
     val permissions = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_IMAGES)
+            arrayOf(
+                Manifest.permission.READ_MEDIA_VIDEO,
+                Manifest.permission.READ_MEDIA_AUDIO,
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.POST_NOTIFICATIONS
+            )
         } else {
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
@@ -171,6 +214,24 @@ fun ArashiPlayerApp(
             musicPosMs = musicPlayer.currentPosition.coerceAtLeast(0L)
             musicDurMs = musicPlayer.duration.coerceAtLeast(0L)
             isVideoPlaying = videoPlayer.isPlaying
+
+            val curTrack = activeTrack
+            if (curTrack != null) {
+                val saved = tagMatcher.getSavedTag(curTrack.id)
+                val title = saved?.title?.ifBlank { curTrack.title } ?: curTrack.title
+                val artist = saved?.artist?.ifBlank { curTrack.artist } ?: curTrack.artist
+                mediaNotifier.updatePlaybackNotification(title, artist, isMusicPlaying)
+                val lines = LrcParser.parseMultilingual(saved?.syncedLyrics, saved?.translatedLyrics, saved?.phoneticLyrics)
+                val line = lines.getOrNull(lines.indexOfLast { it.timestampMs <= musicPosMs }.coerceAtLeast(0))
+                desktopOverlay.update(desktopLyricsConfig, line?.text, line?.translation)
+            } else {
+                desktopOverlay.hide()
+                if (isVideoBgAudio && videoIndex in videoPlaylist.indices) {
+                    mediaNotifier.updatePlaybackNotification(videoPlaylist[videoIndex].second, "后台音频播放", isVideoPlaying)
+                } else {
+                    mediaNotifier.clear()
+                }
+            }
             delay(300)
         }
     }
@@ -292,6 +353,7 @@ fun ArashiPlayerApp(
                 favVersion = favVersion,
                 onFavoriteChanged = { favVersion++ },
                 onToggleSearch = { showSearchBar = !showSearchBar },
+                onRefresh = { refreshAll(); Toast.makeText(context, "已刷新视频列表", Toast.LENGTH_SHORT).show() },
                 onVideoClick = { clicked, list ->
                     musicPlayer.pause()
                     videoPlaylist = list.map { it.uri to it.title }
@@ -326,6 +388,7 @@ fun ArashiPlayerApp(
                 favVersion = favVersion,
                 onFavoriteChanged = { favVersion++ },
                 onToggleSearch = { showSearchBar = !showSearchBar },
+                onRefresh = { refreshAll(); Toast.makeText(context, "已刷新音乐列表", Toast.LENGTH_SHORT).show() },
                 onAudioClick = { audio ->
                     videoPlayer.pause(); isVideoMiniWindow = false; isVideoBgAudio = false
                     activeTrack = audio
@@ -379,6 +442,12 @@ fun ArashiPlayerApp(
                 onThemeChange = onThemeChange,
                 vaultManager = vaultManager,
                 recycleBinManager = recycleBinManager,
+                desktopLyricsConfig = desktopLyricsConfig,
+                onDesktopLyricsChange = {
+                    desktopLyricsConfig = it
+                    desktopLyricsStore.save(it)
+                    if (!it.enabled) desktopOverlay.hide()
+                },
                 onRefreshMedia = { refreshAll() },
                 onOpenHiddenVault = { showHiddenVault = true }
             )
@@ -416,49 +485,246 @@ fun ArashiPlayerApp(
             }
         }
 
-        // 可拖动 & 右下角缩放悬浮小窗
+        // 顶部灵动岛胶囊（播放时登岛，点击展开控制卡片）
+        if ((activeTrack != null || isVideoBgAudio) && !showSearchBar) {
+            val islandTitle = if (isVideoBgAudio && videoIndex in videoPlaylist.indices) {
+                videoPlaylist[videoIndex].second
+            } else {
+                val t = activeTrack!!
+                val s = remember(t.id, tagVersion) { tagMatcher.getSavedTag(t.id) }
+                s?.title?.ifBlank { t.title } ?: t.title
+            }
+            val islandArtist = if (isVideoBgAudio) "后台音频" else {
+                val t = activeTrack!!
+                val s = remember(t.id, tagVersion) { tagMatcher.getSavedTag(t.id) }
+                s?.artist?.ifBlank { t.artist } ?: t.artist
+            }
+            val islandCover: Any? = if (isVideoBgAudio) null else {
+                val t = activeTrack!!
+                val s = remember(t.id, tagVersion) { tagMatcher.getSavedTag(t.id) }
+                s?.coverUrl ?: t.albumArtUri
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 6.dp)
+            ) {
+                if (!isIslandExpanded) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(Color(0xE81C1F26))
+                            .border(0.8.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(22.dp))
+                            .clickable { isIslandExpanded = true }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (islandCover != null) {
+                            AsyncImage(
+                                model = islandCover,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(22.dp).clip(CircleShape)
+                            )
+                        } else {
+                            Icon(Icons.Default.GraphicEq, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(18.dp))
+                        }
+                        Text(islandTitle, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.widthIn(max = 140.dp))
+                        Icon(
+                            if ((isVideoBgAudio && isVideoPlaying) || (!isVideoBgAudio && isMusicPlaying)) Icons.Default.GraphicEq else Icons.Default.Pause,
+                            contentDescription = null,
+                            tint = tokens.accent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .width(320.dp)
+                            .clip(RoundedCornerShape(26.dp))
+                            .background(Color(0xF01C1F26))
+                            .border(0.9.dp, Color.White.copy(alpha = 0.24f), RoundedCornerShape(26.dp))
+                            .clickable { isIslandExpanded = false }
+                            .padding(14.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color(0xFF2B3140))
+                                    .clickable {
+                                        isIslandExpanded = false
+                                        if (isVideoBgAudio) { isVideoBgAudio = false; isVideoFullScreen = true }
+                                        else showFullMusicSheet = true
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (islandCover != null) {
+                                    AsyncImage(model = islandCover, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                                } else {
+                                    Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.White)
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(islandTitle, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Spacer(Modifier.height(2.dp))
+                                Text(islandArtist, color = Color.White.copy(alpha = 0.68f), fontSize = 12.sp, maxLines = 1)
+                            }
+                            IconButton(onClick = { isIslandExpanded = false }, modifier = Modifier.size(28.dp)) {
+                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = null, tint = Color.White.copy(alpha = 0.75f))
+                            }
+                        }
+                        if (!isVideoBgAudio && musicDurMs > 0L) {
+                            Spacer(Modifier.height(10.dp))
+                            LinearProgressIndicator(
+                                progress = { (musicPosMs.toFloat() / musicDurMs.toFloat()).coerceIn(0f, 1f) },
+                                color = Color.White,
+                                trackColor = Color.White.copy(alpha = 0.22f),
+                                modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp))
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(formatDuration(musicPosMs), color = Color.White.copy(alpha = 0.65f), fontSize = 10.sp)
+                                Text(formatDuration(musicDurMs), color = Color.White.copy(alpha = 0.65f), fontSize = 10.sp)
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = {
+                                if (!isVideoBgAudio && audios.isNotEmpty() && activeTrack != null) {
+                                    val idx = audios.indexOfFirst { it.id == activeTrack!!.id }
+                                    val prev = audios[(idx - 1 + audios.size) % audios.size]
+                                    activeTrack = prev
+                                    musicPlayer.setMediaItem(MediaItem.fromUri(prev.uri))
+                                    musicPlayer.prepare(); musicPlayer.play()
+                                }
+                            }, modifier = Modifier.size(34.dp)) {
+                                Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                            }
+                            IconButton(onClick = {
+                                if (isVideoBgAudio) { if (videoPlayer.isPlaying) videoPlayer.pause() else videoPlayer.play() }
+                                else { if (musicPlayer.isPlaying) musicPlayer.pause() else musicPlayer.play() }
+                            }, modifier = Modifier.size(38.dp)) {
+                                val playing = if (isVideoBgAudio) isVideoPlaying else isMusicPlaying
+                                Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                            }
+                            IconButton(onClick = {
+                                if (!isVideoBgAudio && audios.isNotEmpty() && activeTrack != null) {
+                                    val idx = audios.indexOfFirst { it.id == activeTrack!!.id }
+                                    val next = if (musicPlayMode == MusicPlayMode.SHUFFLE) audios.random() else audios[(idx + 1) % audios.size]
+                                    activeTrack = next
+                                    musicPlayer.setMediaItem(MediaItem.fromUri(next.uri))
+                                    musicPlayer.prepare(); musicPlayer.play()
+                                }
+                            }, modifier = Modifier.size(34.dp)) {
+                                Icon(Icons.Default.SkipNext, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // QQ影音风格自适应小窗（竖屏竖着无黑边；轻点才显隐小巧按钮）
         if (isVideoMiniWindow && videoIndex in videoPlaylist.indices) {
-            val miniHeightDp = miniWidthDp * 9f / 16f
+            val isPortrait = videoAspectRatio < 1f
+            val resolvedWidth = if (isPortrait) miniWidthDp.coerceIn(118f, 210f) else miniWidthDp.coerceIn(170f, 340f)
+            val resolvedHeight = (resolvedWidth / videoAspectRatio).coerceIn(110f, 390f)
             Box(
                 modifier = Modifier
                     .offset { IntOffset(miniOffsetX.roundToInt(), miniOffsetY.roundToInt()) }
-                    .width(miniWidthDp.dp)
-                    .height(miniHeightDp.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .border(1.2.dp, Color.White.copy(alpha = 0.65f), RoundedCornerShape(20.dp))
+                    .width(resolvedWidth.dp)
+                    .height(resolvedHeight.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
                     .background(Color.Black)
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { showMiniControls = !showMiniControls })
+                    }
                     .pointerInput(Unit) {
                         detectDragGestures { change, dragAmount ->
                             change.consume(); miniOffsetX += dragAmount.x; miniOffsetY += dragAmount.y
                         }
                     }
             ) {
-                AndroidView(modifier = Modifier.fillMaxSize(), factory = { ctx -> PlayerView(ctx).apply { player = videoPlayer; useController = false } })
-                Row(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    IconButton(onClick = { isVideoMiniWindow = false; isVideoFullScreen = true }, modifier = Modifier.size(26.dp).visionGlassCapsule(CircleShape)) {
-                        Icon(Icons.Default.OpenInFull, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            player = videoPlayer
+                            useController = false
+                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        }
                     }
-                    IconButton(onClick = { videoPlayer.pause(); isVideoMiniWindow = false }, modifier = Modifier.size(26.dp).visionGlassCapsule(CircleShape)) {
-                        Icon(Icons.Default.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                )
+                if (showMiniControls) {
+                    IconButton(
+                        onClick = { videoPlayer.pause(); isVideoMiniWindow = false; showMiniControls = false },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp).visionGlassCapsule(CircleShape)
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
                     }
-                }
-                IconButton(onClick = { if (videoPlayer.isPlaying) videoPlayer.pause() else videoPlayer.play() }, modifier = Modifier.align(Alignment.Center).size(36.dp).visionGlassCapsule(CircleShape)) {
-                    Icon(if (isVideoPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                }
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(topStart = 12.dp))
-                        .background(Color(0x88000000))
-                        .pointerInput(Unit) {
-                            detectDragGestures { change, dragAmount ->
-                                change.consume(); miniWidthDp = (miniWidthDp + dragAmount.x * 0.6f).coerceIn(150f, 340f)
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.ZoomOutMap, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                    IconButton(
+                        onClick = { isVideoMiniWindow = false; isVideoFullScreen = true; showMiniControls = false },
+                        modifier = Modifier.align(Alignment.Center).size(30.dp).visionGlassCapsule(CircleShape)
+                    ) {
+                        Icon(Icons.Default.Fullscreen, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    }
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 8.dp)
+                            .visionGlassCapsule(RoundedCornerShape(16.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { videoPlayer.seekTo((videoPlayer.currentPosition - 10_000L).coerceAtLeast(0L)) },
+                            modifier = Modifier.size(22.dp)
+                        ) {
+                            Icon(Icons.Default.FastRewind, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                        }
+                        IconButton(
+                            onClick = { if (videoPlayer.isPlaying) videoPlayer.pause() else videoPlayer.play() },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(if (isVideoPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        }
+                        IconButton(
+                            onClick = { videoPlayer.seekTo(videoPlayer.currentPosition + 10_000L) },
+                            modifier = Modifier.size(22.dp)
+                        ) {
+                            Icon(Icons.Default.FastForward, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(20.dp)
+                            .clip(RoundedCornerShape(topStart = 8.dp))
+                            .background(Color(0x66000000))
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    val minW = if (videoAspectRatio < 1f) 118f else 170f
+                                    val maxW = if (videoAspectRatio < 1f) 210f else 340f
+                                    miniWidthDp = (miniWidthDp + dragAmount.x * 0.6f).coerceIn(minW, maxW)
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.ZoomOutMap, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
+                    }
                 }
             }
         }
