@@ -84,79 +84,6 @@ class MainActivity : FragmentActivity() {
                 )
             }
         }
-        if (showWelcomeDialog) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0x77000000))
-                    .clickable { showWelcomeDialog = false },
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 28.dp)
-                        .arashiSurface(RoundedCornerShape(28.dp), elevation = 10.dp)
-                        .clickable(enabled = false) {}
-                        .padding(22.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(CircleShape)
-                            .background(tokens.accent.copy(alpha = 0.14f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Group, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(28.dp))
-                    }
-                    Spacer(Modifier.height(14.dp))
-                    Text("交流群", color = tokens.textPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        "欢迎加入交流群获取版本更新，提出宝贵意见！",
-                        color = tokens.textSecondary,
-                        fontSize = 14.sp,
-                        lineHeight = 21.sp
-                    )
-                    Spacer(Modifier.height(20.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(tokens.textPrimary.copy(alpha = 0.08f))
-                                .clickable { showWelcomeDialog = false }
-                                .padding(vertical = 11.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("取消", color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(tokens.accent)
-                                .clickable {
-                                    showWelcomeDialog = false
-                                    runCatching {
-                                        context.startActivity(
-                                            Intent(Intent.ACTION_VIEW, Uri.parse("https://qm.qq.com/q/GtxBLm2e8E"))
-                                        )
-                                    }
-                                }
-                                .padding(vertical = 11.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("确认", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -600,6 +527,80 @@ fun ArashiPlayerApp(
                         Icon(icon, contentDescription = label, tint = if (selected) tokens.accent else tokens.textSecondary, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.height(2.dp))
                         Text(label, color = if (selected) tokens.accent else tokens.textSecondary, fontSize = 11.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+                    }
+                }
+            }
+        }
+
+        if (showWelcomeDialog) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x77000000))
+                    .clickable { showWelcomeDialog = false },
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 28.dp)
+                        .arashiSurface(RoundedCornerShape(28.dp), elevation = 10.dp)
+                        .clickable(enabled = false) {}
+                        .padding(22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(tokens.accent.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Group, contentDescription = null, tint = tokens.accent, modifier = Modifier.size(28.dp))
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Text("交流群", color = tokens.textPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "欢迎加入交流群获取版本更新，提出宝贵意见！",
+                        color = tokens.textSecondary,
+                        fontSize = 14.sp,
+                        lineHeight = 21.sp
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(tokens.textPrimary.copy(alpha = 0.08f))
+                                .clickable { showWelcomeDialog = false }
+                                .padding(vertical = 11.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("取消", color = tokens.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(tokens.accent)
+                                .clickable {
+                                    showWelcomeDialog = false
+                                    runCatching {
+                                        context.startActivity(
+                                            Intent(Intent.ACTION_VIEW, Uri.parse("https://qm.qq.com/q/GtxBLm2e8E"))
+                                        )
+                                    }
+                                }
+                                .padding(vertical = 11.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("确认", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
             }
